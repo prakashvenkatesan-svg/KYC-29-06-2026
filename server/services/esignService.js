@@ -2,7 +2,7 @@ const axios = require("axios");
 const fs = require("fs/promises");
 const path = require("path");
 
-const { generateAccountOpeningPdf } = require("./accountOpeningPdfService");
+const { prepareApplicationPdf } = require("../pdf-flow/services/pdfStepService");
 
 const DEFAULT_ESIGN_BASE_URL =
   process.env.SETU_BASE_URL ||
@@ -518,12 +518,13 @@ const createSignatureRequest = async (
 
 const startEsignForApplication = async (application) => {
   const config = getEsignConfig();
-  const pdfResult = await generateAccountOpeningPdf(application);
-  const signers = buildSignerPayload(application, config, pdfResult);
-  const uploadResult = await uploadDocument(config, pdfResult, application);
+  const pdfResult = await prepareApplicationPdf(application.id);
+  const pdfApplication = pdfResult.application || application;
+  const signers = buildSignerPayload(pdfApplication, config, pdfResult);
+  const uploadResult = await uploadDocument(config, pdfResult, pdfApplication);
   const signatureRequest = await createSignatureRequest(
     config,
-    application,
+    pdfApplication,
     uploadResult.documentId,
     signers,
   );

@@ -40,9 +40,35 @@ const bseExportRoutes = require("./routes/bseExportRoutes");
 const nsdlExportRoutes = require("./routes/nsdlExportRoutes");
 const mfExportRoutes = require("./routes/mfExportRoutes");
 const cdslExportRoutes = require("./routes/cdslExportRoutes");
+const cvlkraExportRoutes = require("./routes/cvlkraExportRoutes");
+const exportDetailsRoutes = require("./routes/exportDetailsRoutes");
 const schemeRoutes = require("./routes/schemeRoutes");
 
 const app = express();
+const defaultAllowedOrigins = [
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+  "https://main.d1nw5j5nzx2oue.amplifyapp.com",
+];
+const allowedOrigins = (
+  process.env.CORS_ALLOWED_ORIGINS ||
+  process.env.FRONTEND_URL ||
+  defaultAllowedOrigins.join(",")
+)
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const resolveCorsOrigin = (requestOrigin) => {
+  if (!requestOrigin) {
+    return allowedOrigins[0] || "*";
+  }
+
+  if (allowedOrigins.includes(requestOrigin)) {
+    return requestOrigin;
+  }
+
+  return allowedOrigins[0] || "*";
+};
 
 // developer
 
@@ -52,7 +78,8 @@ warmUpDateStyle().catch((error) => {
 
 // Middlewares
 app.use((req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", "https://main.d1nw5j5nzx2oue.amplifyapp.com");
+  res.setHeader("Access-Control-Allow-Origin", resolveCorsOrigin(req.headers.origin));
+  res.setHeader("Vary", "Origin");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Api-Key, X-Amz-Date, X-Amz-Security-Token");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD");
 
@@ -126,6 +153,8 @@ app.use("/api/export", bseExportRoutes);
 app.use("/api/export", nsdlExportRoutes);
 app.use("/api/export", mfExportRoutes);
 app.use("/api/export", cdslExportRoutes);
+app.use("/api/export", cvlkraExportRoutes);
+app.use("/api/export", exportDetailsRoutes);
 
 app.get("/", (req, res) => {
   res.send("KYC API Server Running");
@@ -136,8 +165,9 @@ app.use((err, req, res, next) => {
 
   res.setHeader(
     "Access-Control-Allow-Origin",
-    "https://main.d1nw5j5nzx2oue.amplifyapp.com",
+    resolveCorsOrigin(req.headers.origin),
   );
+  res.setHeader("Vary", "Origin");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
 

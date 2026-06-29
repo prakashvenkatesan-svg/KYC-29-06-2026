@@ -15,6 +15,7 @@ const SIGNATURE_ROOT = isLambda
       "uploads",
       "signature",
     );
+const SIGNATURE_PUBLIC_PREFIX = "/uploads/signature";
 
 const folderByMethod = {
   upload_signature: "upload-signature",
@@ -45,6 +46,164 @@ const upload = multer({
     fileSize: 2 * 1024 * 1024,
   },
 });
+
+let signatureUploadColumnsCache = null;
+
+const getSignatureUploadColumns = async () => {
+  if (signatureUploadColumnsCache) {
+    return signatureUploadColumnsCache;
+  }
+
+  const result = await pool.query(
+    `
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'signature_uploads'
+    `,
+  );
+
+  signatureUploadColumnsCache = new Set(
+    result.rows.map((row) => row.column_name),
+  );
+
+  return signatureUploadColumnsCache;
+};
+
+const hasColumn = (columns, columnName) => columns.has(columnName);
+
+const getExistingSignatureSelectColumn = (columns) => {
+  if (hasColumn(columns, "signature_file_path")) {
+    return "signature_file_path";
+  }
+
+  if (hasColumn(columns, "file_path")) {
+    return "file_path";
+  }
+
+  return null;
+};
+
+const buildSignatureMutationPayload = ({
+  columns,
+  applicationId,
+  signatureMethod,
+  signatureFilePath,
+  originalFileName,
+  mimeType,
+  fileBuffer,
+  storedFileName,
+}) => {
+  const values = {
+    application_id: applicationId,
+  };
+
+  if (hasColumn(columns, "signature_method")) {
+    values.signature_method = signatureMethod;
+  }
+
+  if (hasColumn(columns, "signature_file_path")) {
+    values.signature_file_path = signatureFilePath;
+  }
+
+  if (hasColumn(columns, "original_file_name")) {
+    values.original_file_name = originalFileName;
+  }
+
+  if (hasColumn(columns, "mime_type")) {
+    values.mime_type = mimeType;
+  }
+
+  if (hasColumn(columns, "file_size")) {
+    values.file_size = fileBuffer.length;
+  }
+
+  if (hasColumn(columns, "updated_at")) {
+    values.updated_at = "__NOW__";
+  }
+
+  if (hasColumn(columns, "file_name")) {
+    values.file_name = storedFileName;
+  }
+
+  if (hasColumn(columns, "file_type")) {
+    values.file_type = mimeType;
+  }
+
+  if (hasColumn(columns, "file_path")) {
+    values.file_path = signatureFilePath;
+  }
+
+  if (hasColumn(columns, "signature_file")) {
+    values.signature_file = fileBuffer;
+  }
+
+  return values;
+};
+
+const buildUpdateQuery = (values) => {
+  const keys = Object.keys(values).filter((key) => key !== "application_id");
+  const params = [values.application_id];
+
+  const assignments = keys.map((key) => {
+    const value = values[key];
+
+    if (value === "__NOW__") {
+      return `${key} = NOW()`;
+    }
+
+    params.push(value);
+    return `${key} = $${params.length}`;
+  });
+
+  return {
+    text: `
+      UPDATE public.signature_uploads
+      SET ${assignments.join(", ")}
+      WHERE application_id = $1
+      RETURNING *
+    `,
+    values: params,
+  };
+};
+
+const buildInsertQuery = (values, columns) => {
+  const keys = Object.keys(values);
+  const params = [];
+
+  const placeholders = keys.map((key) => {
+    const value = values[key];
+
+    if (value === "__NOW__") {
+      return "NOW()";
+    }
+
+    params.push(value);
+    return `$${params.length}`;
+  });
+
+  if (
+    hasColumn(columns, "application_id") &&
+    !keys.includes("created_at") &&
+    hasColumn(columns, "created_at")
+  ) {
+    keys.push("created_at");
+    placeholders.push("NOW()");
+  }
+
+  return {
+    text: `
+      INSERT INTO public.signature_uploads (
+        ${keys.join(", ")}
+      )
+      VALUES (
+        ${placeholders.join(", ")}
+      )
+      RETURNING *
+    `,
+    values: params,
+  };
+};
 
 const getExtensionFromMimeType = (mimeType) => {
   const mimeExtensionMap = {
@@ -199,76 +358,56 @@ const uploadSignature = async (req, res) => {
     await fs.writeFile(newlyCreatedFilePath, fileBuffer);
 
     const signatureFilePath =
-      `/uploads/signatures/${selectedFolder}/${fileName}`;
+      `${SIGNATURE_PUBLIC_PREFIX}/${selectedFolder}/${fileName}`;
 
     // Upload to S3 if configured (with error tolerance)
     await uploadToS3("clients" + signatureFilePath, fileBuffer, mimeType);
 
-    // Find existing signature path before updating it.
-    const existingSignatureResult = await pool.query(
-      `
-        SELECT signature_file_path
-        FROM public.signature_uploads
-        WHERE application_id = $1
-        LIMIT 1
-      `,
-      [application_id],
+    const signatureUploadColumns = await getSignatureUploadColumns();
+    const existingPathColumn = getExistingSignatureSelectColumn(
+      signatureUploadColumns,
     );
+
+    // Find existing signature path before updating it.
+    const existingSignatureResult = existingPathColumn
+      ? await pool.query(
+          `
+            SELECT ${existingPathColumn} AS signature_path
+            FROM public.signature_uploads
+            WHERE application_id = $1
+            LIMIT 1
+          `,
+          [application_id],
+        )
+      : { rows: [] };
 
     const oldSignatureFilePath =
-      existingSignatureResult.rows[0]?.signature_file_path || null;
+      existingSignatureResult.rows[0]?.signature_path || null;
+
+    const mutationValues = buildSignatureMutationPayload({
+      columns: signatureUploadColumns,
+      applicationId: application_id,
+      signatureMethod: signature_method,
+      signatureFilePath,
+      originalFileName,
+      mimeType,
+      fileBuffer,
+      storedFileName: fileName,
+    });
 
     // Update existing row first.
-    const updateResult = await pool.query(
-      `
-        UPDATE public.signature_uploads
-        SET
-          signature_method = $2,
-          signature_file_path = $3,
-          original_file_name = $4,
-          mime_type = $5,
-          file_size = $6,
-          updated_at = NOW()
-        WHERE application_id = $1
-        RETURNING *
-      `,
-      [
-        application_id,
-        signature_method,
-        signatureFilePath,
-        originalFileName,
-        mimeType,
-        fileBuffer.length,
-      ],
-    );
+    const updateQuery = buildUpdateQuery(mutationValues);
+    const updateResult = await pool.query(updateQuery.text, updateQuery.values);
 
     let savedSignature;
 
     // First time user uploads a signature: insert new row.
     if (updateResult.rows.length === 0) {
-      const insertResult = await pool.query(
-        `
-          INSERT INTO public.signature_uploads (
-            application_id,
-            signature_method,
-            signature_file_path,
-            original_file_name,
-            mime_type,
-            file_size,
-            updated_at
-          )
-          VALUES ($1, $2, $3, $4, $5, $6, NOW())
-          RETURNING *
-        `,
-        [
-          application_id,
-          signature_method,
-          signatureFilePath,
-          originalFileName,
-          mimeType,
-          fileBuffer.length,
-        ],
+      const insertQuery = buildInsertQuery(
+        mutationValues,
+        signatureUploadColumns,
       );
+      const insertResult = await pool.query(insertQuery.text, insertQuery.values);
 
       savedSignature = insertResult.rows[0];
     } else {
@@ -288,8 +427,12 @@ const uploadSignature = async (req, res) => {
       message: "Signature uploaded successfully.",
       data: {
         application_id: savedSignature.application_id,
-        signature_method: savedSignature.signature_method,
-        signature_file_path: savedSignature.signature_file_path,
+        signature_method:
+          savedSignature.signature_method || signature_method,
+        signature_file_path:
+          savedSignature.signature_file_path ||
+          savedSignature.file_path ||
+          signatureFilePath,
       },
     });
   } catch (error) {

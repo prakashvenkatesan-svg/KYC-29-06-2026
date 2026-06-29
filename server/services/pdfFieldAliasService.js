@@ -219,6 +219,10 @@ const V3_REPEATED_FIELD_ALIASES = {
   city: [
     "CITY",
     "CITY1",
+    "City/Town/Village",
+    "City/Town/Village*",
+    "City/Town/Village 1",
+    "City/Town/Village* 1",
     "CityTownVillage 1",
     "TownVillage 1",
   ],
@@ -231,6 +235,8 @@ const V3_REPEATED_FIELD_ALIASES = {
   state: [
     "STATE",
     "STATE1",
+    "City/Town/Village 2",
+    "City/Town/Village* 2",
     "CityTownVillage 2",
     "TownVillage 2",
   ],

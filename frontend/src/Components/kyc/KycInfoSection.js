@@ -11,8 +11,8 @@ const KycInfoSection = () => {
         <p className='feedback-text'>
           For any feedback on the account opening process or other inquiries,
           please feel free to reach out to us at <br />
-          <a href='mailto:feedback@janioncapital.com' className='mail'>
-            feedback@janioncapital.com
+          <a href='mailto:feedback@anioncapital.com' className='mail'>
+            feedback@anioncapital.com
           </a>
         </p>
       </div>

@@ -1,7 +1,4 @@
 const pool = require("../config/db");
-const {
-  getExportDetailsByApplicationIdQuery,
-} = require("../queries/exportDetailsQueries");
 const { exportApplicationToNse } = require("./nseExportService");
 const { exportApplicationToBse } = require("./bseExportService");
 const { exportApplicationToNsdl } = require("./nsdlExportService");
@@ -16,24 +13,206 @@ const createHttpError = (message, statusCode, details = null) => {
   return error;
 };
 
-const fetchExportDetailsByApplicationId = async (applicationId) => {
-  const result = await pool.query(getExportDetailsByApplicationIdQuery, [
-    applicationId,
-  ]);
-  const row = result.rows[0];
+const EXPORT_TABLES = {
+  nse_data: "nse_data",
+  bse_data: "bse_data",
+  nsdl_data: "nsdl_data",
+  cdsl_data: "cdsl_data",
+  mf_data: "mf_data",
+  cvlkra_data: "cvlkra_data",
+};
 
-  if (!row) {
+const pickDefinedValues = (source = {}, keys = []) =>
+  Object.fromEntries(
+    keys
+      .filter((key) => Object.prototype.hasOwnProperty.call(source, key))
+      .map((key) => [key, source[key]]),
+  );
+
+const getNsdlOverrides = (requestBody = {}) => {
+  const scopedOverrides =
+    requestBody.nsdl && typeof requestBody.nsdl === "object" ? requestBody.nsdl : {};
+
+  return {
+    ...pickDefinedValues(requestBody, ["sgn", "pan_verify_flag", "short_name"]),
+    ...pickDefinedValues(scopedOverrides, ["sgn", "pan_verify_flag", "short_name"]),
+  };
+};
+
+const getCdslOverrides = (requestBody = {}) => {
+  const scopedOverrides =
+    requestBody.cdsl && typeof requestBody.cdsl === "object" ? requestBody.cdsl : {};
+
+  return {
+    ...pickDefinedValues(requestBody, [
+      "dpid",
+      "operator_id",
+      "product_number",
+      "annual_income_code",
+      "bo_category",
+      "bo_settlement_planning_flag",
+      "bo_sub_status",
+      "bo_statement_cycle_code",
+      "dividend_bank_acct_type",
+      "dividend_bank_code",
+      "dividend_bank_ccy",
+      "pan_verification_flag",
+      "signature_file_flag",
+      "beneficiary_tax_deduction_status",
+      "nomination_opt_out",
+      "uid_verification_flag",
+      "poa_type_flag",
+      "bo_fee_type",
+      "nationality_code",
+      "bonafide_flag",
+      "email_statement_flag",
+      "annual_report_flag",
+      "bsda_flag",
+      "communication_preference",
+    ]),
+    ...pickDefinedValues(scopedOverrides, [
+      "dpid",
+      "operator_id",
+      "product_number",
+      "annual_income_code",
+      "bo_category",
+      "bo_settlement_planning_flag",
+      "bo_sub_status",
+      "bo_statement_cycle_code",
+      "dividend_bank_acct_type",
+      "dividend_bank_code",
+      "dividend_bank_ccy",
+      "pan_verification_flag",
+      "signature_file_flag",
+      "beneficiary_tax_deduction_status",
+      "nomination_opt_out",
+      "uid_verification_flag",
+      "poa_type_flag",
+      "bo_fee_type",
+      "nationality_code",
+      "bonafide_flag",
+      "email_statement_flag",
+      "annual_report_flag",
+      "bsda_flag",
+      "communication_preference",
+    ]),
+  };
+};
+
+const getMfOverrides = (requestBody = {}) => {
+  const scopedOverrides =
+    requestBody.mf && typeof requestBody.mf === "object" ? requestBody.mf : {};
+
+  return {
+    ...pickDefinedValues(requestBody, [
+      "div_pay_mode",
+      "communication_mode",
+      "paperless_flag",
+      "mobile_declaration_flag",
+      "email_declaration_flag",
+    ]),
+    ...pickDefinedValues(scopedOverrides, [
+      "div_pay_mode",
+      "communication_mode",
+      "paperless_flag",
+      "mobile_declaration_flag",
+      "email_declaration_flag",
+    ]),
+  };
+};
+
+const getCvlkraOverrides = (requestBody = {}) => {
+  const scopedOverrides =
+    requestBody.cvlkra && typeof requestBody.cvlkra === "object"
+      ? requestBody.cvlkra
+      : {};
+
+  return {
+    ...requestBody,
+    ...scopedOverrides,
+  };
+};
+
+const buildExportSummary = (exportResults = {}) => {
+  const entries = Object.entries(exportResults);
+  const succeeded = entries
+    .filter(([, result]) => result?.success)
+    .map(([key]) => key);
+  const failed = entries
+    .filter(([, result]) => result && result.success === false)
+    .map(([key]) => key);
+
+  return {
+    total: entries.length,
+    succeeded_count: succeeded.length,
+    failed_count: failed.length,
+    succeeded,
+    failed,
+    is_partial_failure: failed.length > 0,
+  };
+};
+
+const fetchLatestExportRow = async (applicationId, tableName) => {
+  const query = `
+    SELECT row_to_json(export_row) AS data
+    FROM (
+      SELECT *
+      FROM public.${tableName}
+      WHERE application_id = $1
+      ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST, id DESC
+      LIMIT 1
+    ) AS export_row;
+  `;
+
+  const result = await pool.query(query, [applicationId]);
+  return result.rows[0]?.data || null;
+};
+
+const fetchExportDetailsByApplicationId = async (applicationId) => {
+  const applicationResult = await pool.query(
+    "SELECT id FROM public.kyc_applications WHERE id = $1 LIMIT 1",
+    [applicationId],
+  );
+
+  if (applicationResult.rows.length === 0) {
     throw createHttpError("Application not found in public.kyc_applications", 404);
   }
 
+  const tableExistenceResult = await pool.query(
+    `
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+        AND table_name = ANY($1::text[])
+    `,
+    [Object.values(EXPORT_TABLES)],
+  );
+
+  const existingTables = new Set(
+    tableExistenceResult.rows.map((row) => row.table_name),
+  );
+
+  const exportEntries = await Promise.all(
+    Object.entries(EXPORT_TABLES).map(async ([responseKey, tableName]) => {
+      if (!existingTables.has(tableName)) {
+        return [responseKey, null];
+      }
+
+      const latestRow = await fetchLatestExportRow(applicationId, tableName);
+      return [responseKey, latestRow];
+    }),
+  );
+
+  const exportData = Object.fromEntries(exportEntries);
+
   return {
-    application_id: Number(row.application_id),
-    nse_data: row.nse_data || null,
-    bse_data: row.bse_data || null,
-    nsdl_data: row.nsdl_data || null,
-    cdsl_data: row.cdsl_data || null,
-    mf_data: row.mf_data || null,
-    cvlkra_data: row.cvlkra_data || null,
+    application_id: Number(applicationId),
+    nse_data: exportData.nse_data,
+    bse_data: exportData.bse_data,
+    nsdl_data: exportData.nsdl_data,
+    cdsl_data: exportData.cdsl_data,
+    mf_data: exportData.mf_data,
+    cvlkra_data: exportData.cvlkra_data,
   };
 };
 
@@ -58,20 +237,19 @@ const exportAndFetchDetailsByApplicationId = async (applicationId, requestBody =
     },
     {
       key: "nsdl",
-      run: () => exportApplicationToNsdl(applicationId, requestBody.nsdl || {}),
+      run: () => exportApplicationToNsdl(applicationId, getNsdlOverrides(requestBody)),
     },
     {
       key: "cdsl",
-      run: () => exportApplicationToCdsl(applicationId, requestBody.cdsl || {}),
+      run: () => exportApplicationToCdsl(applicationId, getCdslOverrides(requestBody)),
     },
     {
       key: "mf",
-      run: () => exportApplicationToMf(applicationId, requestBody.mf || {}),
+      run: () => exportApplicationToMf(applicationId, getMfOverrides(requestBody)),
     },
     {
       key: "cvlkra",
-      run: () =>
-        exportApplicationToCvlkra(applicationId, requestBody.cvlkra || requestBody),
+      run: () => exportApplicationToCvlkra(applicationId, getCvlkraOverrides(requestBody)),
     },
   ];
 
@@ -95,10 +273,12 @@ const exportAndFetchDetailsByApplicationId = async (applicationId, requestBody =
   }
 
   const exportDetails = await fetchExportDetailsByApplicationId(applicationId);
+  const export_summary = buildExportSummary(export_results);
 
   return {
     ...exportDetails,
     export_results,
+    export_summary,
   };
 };
 

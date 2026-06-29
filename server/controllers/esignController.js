@@ -12,6 +12,9 @@ const { markAllocatedBoidUsed } = require("../services/boidAllocationService");
 const {
   sendCompletionEmailIfNeeded,
 } = require("../services/customerNotificationService");
+const {
+  exportAndFetchDetailsByApplicationId,
+} = require("../services/exportDetailsService");
 
 const fetchApplicationDetail = async (applicationId) => {
   const result = await pool.query(getApplicationDetailQuery, [applicationId]);
@@ -40,6 +43,26 @@ const triggerCompletionEmail = async (applicationId) => {
     console.error(
       `Completion email failed for application ${applicationId}:`,
       error.message,
+    );
+  }
+};
+
+const triggerPostEsignExports = async (applicationId) => {
+  try {
+    const exportResult = await exportAndFetchDetailsByApplicationId(
+      applicationId,
+      {},
+    );
+
+    console.info("Post-eSign export result:", {
+      applicationId,
+      export_summary: exportResult.export_summary,
+    });
+  } catch (error) {
+    console.error(
+      `Post-eSign export failed for application ${applicationId}:`,
+      error.message,
+      error.details || "",
     );
   }
 };
@@ -137,6 +160,7 @@ const ensureSignedDocumentForApplication = async (applicationId, application) =>
     await markStampPaperUsedAfterEsign(applicationId);
     await markAllocatedBoidUsed(applicationId, application.boid);
     await triggerCompletionEmail(applicationId);
+    await triggerPostEsignExports(applicationId);
   } catch (sideEffectError) {
     console.error("Failed to execute post-esign side effects (ensureSignedDocument):", sideEffectError.message);
   }
@@ -322,6 +346,7 @@ const getEsignStatus = async (req, res) => {
         await markStampPaperUsedAfterEsign(applicationId);
         await markAllocatedBoidUsed(applicationId, application.boid);
         await triggerCompletionEmail(applicationId);
+        await triggerPostEsignExports(applicationId);
       } catch (sideEffectError) {
         console.error("Failed to execute post-esign side effects:", sideEffectError.message);
       }

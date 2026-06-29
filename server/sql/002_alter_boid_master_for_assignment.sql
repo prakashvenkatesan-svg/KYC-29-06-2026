@@ -1,0 +1,3 @@
+ALTER TABLE public.boid_master
+ADD COLUMN IF NOT EXISTS assigned_at TIMESTAMP NULL,
+ADD COLUMN IF NOT EXISTS application_id BIGINT NULL;

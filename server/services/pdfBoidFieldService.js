@@ -1,0 +1,122 @@
+const parseConfiguredFieldNames = (value) =>
+  String(value || "")
+    .split(",")
+    .map((fieldName) => fieldName.trim())
+    .filter(Boolean);
+
+const getRepeatedBoidFieldNames = () => {
+  const configuredFieldNames = parseConfiguredFieldNames(
+    process.env.ACCOUNT_OPENING_BOID_REPEAT_FIELD_NAMES,
+  );
+
+  if (configuredFieldNames.length > 0) {
+    return configuredFieldNames;
+  }
+
+  return [];
+};
+
+const parseCoordinateConfig = (value) => {
+  const [page, x, y, size] = String(value || "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (!page || !x || !y) {
+    return null;
+  }
+
+  const pageIndex = Number(page) - 1;
+  const xCoordinate = Number(x);
+  const yCoordinate = Number(y);
+  const fontSize = Number(size || 10);
+
+  if (
+    Number.isNaN(pageIndex) ||
+    Number.isNaN(xCoordinate) ||
+    Number.isNaN(yCoordinate) ||
+    Number.isNaN(fontSize)
+  ) {
+    return null;
+  }
+
+  return {
+    pageIndex,
+    x: xCoordinate,
+    y: yCoordinate,
+    size: fontSize,
+  };
+};
+
+const parseCoordinateConfigs = (value) =>
+  String(value || "")
+    .split("|")
+    .map((part) => parseCoordinateConfig(part))
+    .filter(Boolean);
+
+const getDpIdFromBoid = (boid = "") => {
+  const normalizedBoid = String(boid || "").replace(/\D/g, "");
+
+  if (normalizedBoid.length < 8) {
+    return "";
+  }
+
+  return normalizedBoid.slice(0, 8);
+};
+
+const buildBoidPdfFields = (application) => {
+  const boid = String(application?.boid || "").trim();
+  const dpId = getDpIdFromBoid(boid);
+
+  const fieldNames = parseConfiguredFieldNames(
+    process.env.ACCOUNT_OPENING_BOID_FIELD_NAMES,
+  );
+  const repeatedFieldNames = getRepeatedBoidFieldNames();
+  const fields = [...new Set([...fieldNames, ...repeatedFieldNames])].reduce(
+    (accumulator, fieldName) => {
+      if (boid) {
+        accumulator[fieldName] = boid;
+      }
+      return accumulator;
+    },
+    {},
+  );
+
+  if (boid) {
+    fields.BOID = boid;
+    fields["BENEFICIARY ACCOUNT NOCDSL"] = boid;
+  }
+
+  if (dpId) {
+    fields["DP ID"] = dpId;
+  }
+
+  return fields;
+};
+
+const getBoidOverlayConfigs = (application) => {
+  const boid = String(application?.boid || "").trim();
+
+  if (!boid) {
+    return [];
+  }
+
+  const configuredValue =
+    process.env.ACCOUNT_OPENING_BOID_OVERLAYS ||
+    process.env.ACCOUNT_OPENING_BOID_OVERLAY ||
+    "";
+
+  return parseCoordinateConfigs(configuredValue).map((overlay) => ({
+    ...overlay,
+    text: boid,
+  }));
+};
+
+const getBoidOverlayConfig = (application) =>
+  getBoidOverlayConfigs(application)[0] || null;
+
+module.exports = {
+  buildBoidPdfFields,
+  getBoidOverlayConfigs,
+  getBoidOverlayConfig,
+};

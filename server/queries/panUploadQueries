@@ -1,0 +1,23 @@
+const pool = require("../config/db");
+
+const savePanCard = ({
+  application_id,
+  file_name,
+  file_type,
+  file_path,
+}) => {
+  return pool.query(
+    `INSERT INTO pan_card_upload
+    (application_id, file_name, file_type, file_path)
+    VALUES ($1,$2,$3,$4)
+    RETURNING *`,
+    [
+      application_id,
+      file_name,
+      file_type,
+      file_path,
+    ]
+  );
+};
+
+module.exports = { savePanCard };

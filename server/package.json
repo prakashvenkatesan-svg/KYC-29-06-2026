@@ -1,0 +1,33 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "nodemon server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1075.0",
+    "@aws-sdk/client-secrets-manager": "^3.1075.0",
+    "@vendia/serverless-express": "^4.12.6",
+    "axios": "^1.17.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "fast-xml-parser": "^5.8.0",
+    "multer": "^2.1.1",
+    "nodemailer": "^8.0.7",
+    "pdf-lib": "^1.17.1",
+    "pg": "^8.21.0",
+    "sha512": "^0.0.1"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-lambda": "^3.1075.0",
+    "nodemon": "^3.1.14"
+  }
+}

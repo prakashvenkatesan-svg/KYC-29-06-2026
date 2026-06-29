@@ -1103,7 +1103,7 @@ const parseDisplayDob = (value) => {
                             type='text'
                             className='input-field'
                             name='dob'
-                            placeholder='Enter your Date of Birth'
+                            placeholder='Enter Nominee Date of Birth'
                             value={draftNominee.dob}
                             onChange={handleChange}
                             inputMode='numeric'
@@ -1112,7 +1112,7 @@ const parseDisplayDob = (value) => {
                           />
 
                           <label className='floating-label'>
-                            Enter your Date of Birth <span>*</span>
+                            Enter Nominee Date of Birth <span>*</span>
                           </label>
                         </div>
 
@@ -1124,7 +1124,7 @@ const parseDisplayDob = (value) => {
                           <input
                             type='text'
                             className='input-field'
-                            placeholder='Enter your mail ID'
+                            placeholder='Enter Nominee Mail ID'
                             name='email'
                             value={draftNominee.email}
                             onChange={handleChange}
@@ -1133,7 +1133,7 @@ const parseDisplayDob = (value) => {
                           />
 
                           <label className='floating-label'>
-                            Enter your Mail ID <span>*</span>
+                            Enter Nominee Mail ID <span>*</span>
                           </label>
                         </div>
 
@@ -1147,7 +1147,7 @@ const parseDisplayDob = (value) => {
                           <input
                             type='text'
                             className='input-field'
-                            placeholder='Enter your Mobile number'
+                            placeholder='Enter Nominee Mobile Number'
                             name='mobile'
                             value={draftNominee.mobile}
                             onChange={handleChange}
@@ -1157,7 +1157,7 @@ const parseDisplayDob = (value) => {
                           />
 
                           <label className='floating-label'>
-                            Enter your Mobile Number <span>*</span>
+                            Enter Nominee Mobile Number <span>*</span>
                           </label>
                         </div>
 

@@ -52,6 +52,43 @@ const splitAddress = (address) => {
   };
 };
 
+const extractKraLocalityFromAddressLines = (kra = {}) => {
+  const addressLines = [
+    kra.app_cor_add3,
+    kra.app_cor_add2,
+    kra.app_cor_add1,
+    kra.app_per_add3,
+    kra.app_per_add2,
+    kra.app_per_add1,
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+
+  for (const line of addressLines) {
+    const normalizedLine = line
+      .replace(/\b\d{6}\b/g, "")
+      .replace(/\bIndia\b/gi, "")
+      .replace(/\bTamil Nadu\b/gi, "")
+      .replace(/\bKarnataka\b/gi, "")
+      .replace(/\bAndhra Pradesh\b/gi, "")
+      .replace(/\bTelangana\b/gi, "")
+      .replace(/\bKerala\b/gi, "")
+      .replace(/\bMaharashtra\b/gi, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (!normalizedLine) {
+      continue;
+    }
+
+    if (/[a-zA-Z]/.test(normalizedLine)) {
+      return normalizedLine;
+    }
+  }
+
+  return "";
+};
+
 const extractSixDigitPin = (value) => {
   const match = String(value || "").match(/\b(\d{6})\b/);
   return match ? match[1] : "";
@@ -380,21 +417,52 @@ const buildPdfFieldPayload = (application) => {
   if (!panNumber) missingFields.push("pan_number");
   if (!dob) missingFields.push("dob");
 
+  const resolvedCorrespondenceCity =
+    verifiedIdentitySource === "kra"
+      ? firstNonEmpty(
+          kra.app_cor_city,
+          kra.app_per_city,
+          extractKraLocalityFromAddressLines(kra),
+          addressFields.CITY,
+          addressFields.DISTRICT,
+        )
+      : addressFields.CITY;
+  const resolvedCorrespondenceState =
+    verifiedIdentitySource === "kra"
+      ? firstNonEmpty(
+          kra.app_cor_state,
+          kra.app_per_state,
+          addressFields.STATE,
+        )
+      : addressFields.STATE;
+  const resolvedCorrespondenceDistrict =
+    verifiedIdentitySource === "kra"
+      ? firstNonEmpty(
+          kra.app_corr_district,
+          kra.app_perm_district,
+          addressFields.DISTRICT,
+        )
+      : addressFields.DISTRICT;
+  const resolvedCorrespondencePincode =
+    verifiedIdentitySource === "kra"
+      ? firstNonEmpty(
+          kra.app_cor_pincd,
+          kra.app_per_pincd,
+          addressFields["PIN CODE"],
+        )
+      : addressFields["PIN CODE"];
+
   const nomineeAddressFallback = {
     "1 ADDRESS FOR CORRESPONDENCRESIDENCERow1": correspondenceAddress.line1,
     "1 ADDRESS FOR CORRESPONDENCRESIDENCERow2": correspondenceAddress.line2,
-    CITY: verifiedIdentitySource === "kra" ? firstNonEmpty(kra.app_cor_city, addressFields.CITY) : addressFields.CITY,
-    STATE: verifiedIdentitySource === "kra" ? firstNonEmpty(kra.app_cor_state, addressFields.STATE) : addressFields.STATE,
-    "PIN CODE":
-      verifiedIdentitySource === "kra"
-        ? firstNonEmpty(kra.app_cor_pincd, addressFields["PIN CODE"])
-        : addressFields["PIN CODE"],
+    CITY: resolvedCorrespondenceCity,
+    STATE: resolvedCorrespondenceState,
+    DISTRICT: resolvedCorrespondenceDistrict,
+    "PIN CODE": resolvedCorrespondencePincode,
   };
   const placeValue = firstNonEmpty(
-    verifiedIdentitySource === "kra" ? kra.app_cor_city : "",
-    addressFields.CITY,
-    verifiedIdentitySource === "kra" ? kra.app_cor_state : "",
-    addressFields.STATE,
+    resolvedCorrespondenceCity,
+    resolvedCorrespondenceState,
     personal.country_of_birth,
   );
 
@@ -420,22 +488,13 @@ const buildPdfFieldPayload = (application) => {
     MarriedStatus: mapMaritalStatusToPdfValue(personal.marital_status),
     "1 ADDRESS FOR CORRESPONDENCRESIDENCERow1": correspondenceAddress.line1,
     "1 ADDRESS FOR CORRESPONDENCRESIDENCERow2": correspondenceAddress.line2,
-    CITY: verifiedIdentitySource === "kra" ? firstNonEmpty(kra.app_cor_city, addressFields.CITY) : addressFields.CITY,
-    DISTRICT: firstNonEmpty(addressFields.DISTRICT),
-    STATE: verifiedIdentitySource === "kra" ? firstNonEmpty(kra.app_cor_state, addressFields.STATE) : addressFields.STATE,
+    CITY: resolvedCorrespondenceCity,
+    DISTRICT: resolvedCorrespondenceDistrict,
+    STATE: resolvedCorrespondenceState,
     COUNTRY: DEFAULT_COUNTRY_VALUE,
-    "PIN CODE":
-      verifiedIdentitySource === "kra"
-        ? firstNonEmpty(kra.app_cor_pincd, addressFields["PIN CODE"])
-        : addressFields["PIN CODE"],
-    "Pin Code":
-      verifiedIdentitySource === "kra"
-        ? firstNonEmpty(kra.app_cor_pincd, addressFields["PIN CODE"])
-        : addressFields["PIN CODE"],
-    PINCODE:
-      verifiedIdentitySource === "kra"
-        ? firstNonEmpty(kra.app_cor_pincd, addressFields["PIN CODE"])
-        : addressFields["PIN CODE"],
+    "PIN CODE": resolvedCorrespondencePincode,
+    "Pin Code": resolvedCorrespondencePincode,
+    PINCODE: resolvedCorrespondencePincode,
     "4 PERMANENT ADDRESS OF RESIDENT APPLICANT IF DIFFERENT FROM ABOVE B1 OR OVERSEAS ADDRESS MANDATORY FOR NONRESIDENT APPLICANTRow1":
       permanentAddress.line1,
     "4 PERMANENT ADDRESS OF RESIDENT APPLICANT IF DIFFERENT FROM ABOVE B1 OR OVERSEAS ADDRESS MANDATORY FOR NONRESIDENT APPLICANTRow2":
@@ -444,8 +503,8 @@ const buildPdfFieldPayload = (application) => {
     LANDMARK1: addressFields.LANDMARK_2,
     CITY_2: addressFields.CITY_2,
     CITY1: addressFields.CITY_2,
-    DISTRICT_2: addressFields.DISTRICT_2,
-    DISTRICT1: addressFields.DISTRICT_2,
+    DISTRICT_2: resolvedCorrespondenceDistrict,
+    DISTRICT1: resolvedCorrespondenceDistrict,
     STATE_2: addressFields.STATE_2,
     STATE1: addressFields.STATE_2,
     COUNTRY_2: DEFAULT_COUNTRY_VALUE,
@@ -540,22 +599,13 @@ const buildPdfFieldPayload = (application) => {
       mobile: contact.mobile_number || "",
         email: contact.email || "",
         client_code: clientCode,
-        correspondence_line_1: correspondenceAddress.line1,
+      correspondence_line_1: correspondenceAddress.line1,
       correspondence_line_2: correspondenceAddress.line2,
-      city:
-        verifiedIdentitySource === "kra"
-          ? firstNonEmpty(kra.app_cor_city, addressFields.CITY)
-          : addressFields.CITY,
-      district: firstNonEmpty(addressFields.DISTRICT),
-      state:
-        verifiedIdentitySource === "kra"
-          ? firstNonEmpty(kra.app_cor_state, addressFields.STATE)
-          : addressFields.STATE,
+      city: resolvedCorrespondenceCity,
+      district: resolvedCorrespondenceDistrict,
+      state: resolvedCorrespondenceState,
       country: DEFAULT_COUNTRY_VALUE,
-      pincode:
-        verifiedIdentitySource === "kra"
-          ? firstNonEmpty(kra.app_cor_pincd, addressFields["PIN CODE"])
-          : addressFields["PIN CODE"],
+      pincode: resolvedCorrespondencePincode,
     }),
   );
 

@@ -1,29 +1,12 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import KycStepper from "../../Components/kyc/KycStepper";
 import api from "../../services/api";
 
-const getStoredClientCodeForApplication = (applicationId) => {
-  const storedClientCode = localStorage.getItem("client_code") || "";
-  const storedApplicationId =
-    localStorage.getItem("client_code_application_id") || "";
-
-  if (!applicationId || storedApplicationId !== String(applicationId)) {
-    return "";
-  }
-
-  return storedClientCode;
-};
-
 const KycCompleted = () => {
   const navigate = useNavigate();
-  const applicationId = localStorage.getItem("application_id");
   const [processingPdf, setProcessingPdf] = useState(false);
-  const [generatingClientCode, setGeneratingClientCode] = useState(false);
-  const [clientCode, setClientCode] = useState(
-    getStoredClientCodeForApplication(applicationId),
-  );
   const [pdfMessage, setPdfMessage] = useState("");
 
   const getPdfResponse = async () => {
@@ -99,67 +82,6 @@ const KycCompleted = () => {
     );
   };
 
-  const handleGenerateClientCode = async () => {
-    const email = localStorage.getItem("email") || "";
-    const panNumber =
-      localStorage.getItem("panNumber") ||
-      localStorage.getItem("pan_number") ||
-      "";
-
-    if (!email) {
-      setPdfMessage("Registered email not found. Please resume the application and try again.");
-      return;
-    }
-
-    if (!applicationId) {
-      setPdfMessage("Application ID not found. Please resume the application and try again.");
-      return;
-    }
-
-    if (!panNumber) {
-      setPdfMessage("PAN number not found. Please complete PAN verification and try again.");
-      return;
-    }
-
-    try {
-      setGeneratingClientCode(true);
-      setPdfMessage("");
-
-      const response = await api.post("/client/generate-client-code", {
-        application_id: Number(applicationId),
-        email,
-        panNumber,
-      });
-
-      const generatedClientCode = response.data?.clientCode || "";
-
-      if (generatedClientCode) {
-        localStorage.setItem("client_code", generatedClientCode);
-        localStorage.setItem(
-          "client_code_application_id",
-          String(applicationId),
-        );
-        setClientCode(generatedClientCode);
-        setPdfMessage(
-          `Client code generated successfully${response.data?.message ? ` and ${response.data.message.toLowerCase()}` : "."}`,
-        );
-        await previewPdf();
-        return;
-      }
-
-      setPdfMessage(
-        response.data?.message || "Client code could not be generated right now.",
-      );
-    } catch (error) {
-      setPdfMessage(
-        error.response?.data?.message ||
-          "Unable to generate client code right now.",
-      );
-    } finally {
-      setGeneratingClientCode(false);
-    }
-  };
-
   return (
     <div className='container py-5'>
       <h2 className='text-center'>Open a trading and demat account online
@@ -192,19 +114,6 @@ const KycCompleted = () => {
           your application and proceed with the next activation steps.
         </p>
 
-        {clientCode ? (
-          <p
-            style={{
-              marginBottom: "20px",
-              color: "#264095",
-              lineHeight: 1.5,
-              fontWeight: 600,
-            }}
-          >
-            Client Code: {clientCode}
-          </p>
-        ) : null}
-
         <p
           style={{
             marginBottom: "20px",
@@ -226,20 +135,6 @@ const KycCompleted = () => {
           >
             {pdfMessage}
           </p>
-        ) : null}
-
-        {!clientCode ? (
-          <button
-            type='button'
-            className='submit-btn'
-            style={{ maxWidth: "320px", margin: "0 auto 16px" }}
-            onClick={handleGenerateClientCode}
-            disabled={generatingClientCode}
-          >
-            {generatingClientCode
-              ? "Generating Client Code..."
-              : "Generate Client Code"}
-          </button>
         ) : null}
 
         <button

@@ -219,8 +219,14 @@ const V3_REPEATED_FIELD_ALIASES = {
   city: [
     "CITY",
     "CITY1",
+    "City/District",
+    "City/Town/Village",
+    "City/Town/Village*",
+    "City/Town/Village 1",
+    "City/Town/Village* 1",
     "CityTownVillage 1",
     "TownVillage 1",
+    "A Correspondence Local Address Line 1 Line 2 Line3 Pin Code State Country Address Type ResidentialBusiness Residential Business Registered Office Unspecified CityTownVillage DistrictRow1",
   ],
   district: [
     "DISTRICT",
@@ -231,6 +237,9 @@ const V3_REPEATED_FIELD_ALIASES = {
   state: [
     "STATE",
     "STATE1",
+    "State",
+    "City/Town/Village 2",
+    "City/Town/Village* 2",
     "CityTownVillage 2",
     "TownVillage 2",
   ],
@@ -243,6 +252,7 @@ const V3_REPEATED_FIELD_ALIASES = {
   pincode: [
     "PIN CODE",
     "Pin Code",
+    "Pincode",
     "PINCODE",
     "PIN CODE_2",
     "Pin Code_2",

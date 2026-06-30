@@ -1,4 +1,6 @@
 const pool = require("../config/db");
+const fs = require("fs/promises");
+const path = require("path");
 const {
   getNsdlSourceByApplicationIdQuery,
   checkNsdlApplicationIdUniqueIndexQuery,
@@ -17,12 +19,175 @@ const normalizeOptionalString = (value) => {
   return normalized || "";
 };
 
+let signatureUploadColumnsCache = null;
+
+const getSignatureUploadColumns = async (client) => {
+  if (signatureUploadColumnsCache) {
+    return signatureUploadColumnsCache;
+  }
+
+  const result = await client.query(
+    `
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'signature_uploads'
+    `,
+  );
+
+  signatureUploadColumnsCache = new Set(
+    result.rows.map((row) => row.column_name),
+  );
+
+  return signatureUploadColumnsCache;
+};
+
+const buildSignatureSelectQuery = (columns) => {
+  const selectFields = ["application_id"];
+
+  if (columns.has("file_path")) {
+    selectFields.push("file_path");
+  }
+
+  if (columns.has("signature_file_path")) {
+    selectFields.push("signature_file_path");
+  }
+
+  if (columns.has("signature_file")) {
+    selectFields.push("signature_file");
+  }
+
+  if (columns.has("updated_at")) {
+    selectFields.push("updated_at");
+  }
+
+  if (columns.has("created_at")) {
+    selectFields.push("created_at");
+  }
+
+  return `
+    SELECT ${selectFields.join(", ")}
+    FROM public.signature_uploads
+    WHERE application_id = $1
+    ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST, id DESC
+    LIMIT 1
+  `;
+};
+
+const ensureHexPrefix = (hexValue) => {
+  const normalized = normalizeOptionalString(hexValue);
+
+  if (!normalized) {
+    return "";
+  }
+
+  return normalized.startsWith("0x") ? normalized : `0x${normalized}`;
+};
+
+const toHexFromBuffer = (buffer) => {
+  if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
+    return "";
+  }
+
+  return ensureHexPrefix(buffer.toString("hex"));
+};
+
+const resolveSignatureAbsolutePath = (signaturePath) => {
+  const normalizedPath = normalizeOptionalString(signaturePath);
+
+  if (!normalizedPath) {
+    return [];
+  }
+
+  if (path.isAbsolute(normalizedPath)) {
+    return [normalizedPath];
+  }
+
+  const normalizedRelativePath = normalizedPath.replace(/^\//, "");
+  const candidatePaths = new Set([
+    path.resolve(
+      __dirname,
+      "..",
+      normalizedRelativePath,
+    ),
+  ]);
+
+  if (normalizedRelativePath.includes("uploads/signatures/")) {
+    candidatePaths.add(
+      path.resolve(
+        __dirname,
+        "..",
+        normalizedRelativePath.replace("uploads/signatures/", "uploads/signature/"),
+      ),
+    );
+  }
+
+  if (normalizedRelativePath.includes("uploads/signature/")) {
+    candidatePaths.add(
+      path.resolve(
+        __dirname,
+        "..",
+        normalizedRelativePath.replace("uploads/signature/", "uploads/signatures/"),
+      ),
+    );
+  }
+
+  return [...candidatePaths];
+};
+
+const loadSignatureHexFromFilePath = async (signaturePath) => {
+  const candidatePaths = resolveSignatureAbsolutePath(signaturePath);
+
+  for (const candidatePath of candidatePaths) {
+    try {
+      const fileBuffer = await fs.readFile(candidatePath);
+      return toHexFromBuffer(fileBuffer);
+    } catch (error) {
+      // Try the next compatible storage path.
+    }
+  }
+
+  return "";
+};
+
+const loadSignatureHexFromStorage = async (client, applicationId) => {
+  const columns = await getSignatureUploadColumns(client);
+
+  if (columns.size === 0) {
+    return "";
+  }
+
+  const result = await client.query(buildSignatureSelectQuery(columns), [
+    applicationId,
+  ]);
+  const signatureRow = result.rows[0];
+
+  if (!signatureRow) {
+    return "";
+  }
+
+  const signatureBlobHex = toHexFromBuffer(signatureRow.signature_file);
+
+  if (signatureBlobHex) {
+    return signatureBlobHex;
+  }
+
+  const storedPath =
+    normalizeOptionalString(signatureRow.signature_file_path) ||
+    normalizeOptionalString(signatureRow.file_path);
+
+  if (!storedPath) {
+    return "";
+  }
+
+  return loadSignatureHexFromFilePath(storedPath);
+};
+
 const exportApplicationToNsdl = async (applicationId, options = {}) => {
   const client = await pool.connect();
 
   const dpid = normalizeOptionalString(process.env.NSDL_DPID);
   const channelId = normalizeOptionalString(process.env.NSDL_CHANNEL_ID);
-  const signatureHex = normalizeOptionalString(options.sgn);
   const panVerifyFlag = normalizeOptionalString(
     options.pan_verify_flag || process.env.NSDL_PAN_VERIFY_FLAG,
   );
@@ -39,6 +204,10 @@ const exportApplicationToNsdl = async (applicationId, options = {}) => {
     if (applicationResult.rows.length === 0) {
       throw createHttpError("Application not found in public.kyc_applications", 404);
     }
+
+    const signatureHex =
+      normalizeOptionalString(options.sgn) ||
+      (await loadSignatureHexFromStorage(client, applicationId));
 
     const tableResult = await client.query(`
       SELECT EXISTS (

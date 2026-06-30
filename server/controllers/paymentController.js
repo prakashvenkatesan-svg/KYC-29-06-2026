@@ -1,6 +1,40 @@
 const crypto = require("crypto");
 const pool = require("../config/db");
 
+const resolveBackendBaseUrl = (req) => {
+  if (process.env.PAYMENT_API_BASE_URL) {
+    return process.env.PAYMENT_API_BASE_URL;
+  }
+
+  if (process.env.API_GATEWAY_URL) {
+    return process.env.API_GATEWAY_URL;
+  }
+
+  const forwardedProto = req.get("x-forwarded-proto");
+  const protocol =
+    forwardedProto ||
+    (req.secure ? "https" : "http");
+  const host = req.get("host") || "localhost:5000";
+
+  return `${protocol}://${host}`;
+};
+
+const resolveFrontendBaseUrl = () => {
+  if (process.env.PAYMENT_FRONTEND_BASE_URL) {
+    return process.env.PAYMENT_FRONTEND_BASE_URL;
+  }
+
+  if (process.env.FRONTEND_BASE_URL) {
+    return process.env.FRONTEND_BASE_URL;
+  }
+
+  if (process.env.REACT_APP_SITE_URL) {
+    return process.env.REACT_APP_SITE_URL;
+  }
+
+  return "http://localhost:3000";
+};
+
 const generateHash = async (req, res) => {
   try {
     const {
@@ -34,9 +68,9 @@ const generateHash = async (req, res) => {
     const key = process.env.PAYU_KEY;
     const salt = process.env.PAYU_SALT;
 
-    const apiGatewayBase = process.env.API_GATEWAY_URL || "https://57yp657i65.execute-api.ap-south-1.amazonaws.com/staging";
-    const surl = `${apiGatewayBase}/api/payment/success`;
-    const furl = `${apiGatewayBase}/api/payment/failure`;
+    const backendBaseUrl = resolveBackendBaseUrl(req);
+    const surl = `${backendBaseUrl}/api/payment/success`;
+    const furl = `${backendBaseUrl}/api/payment/failure`;
 
     const hashString = `${key}|${txnid}|${amount}|${productinfo}|${firstname}|${email}|||||||||||${salt}`;
 
@@ -80,7 +114,7 @@ const paymentSuccess = async (req, res) => {
       [status, mode, txnid],
     );
 
-    const frontendBase = process.env.FRONTEND_BASE_URL || "https://main.d1nw5j5nzx2oue.amplifyapp.com";
+    const frontendBase = resolveFrontendBaseUrl();
     return res.redirect(`${frontendBase}/payment-completed`);
   } catch (error) {
     console.log(error);

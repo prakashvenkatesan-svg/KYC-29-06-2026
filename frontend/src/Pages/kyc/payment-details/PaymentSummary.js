@@ -29,14 +29,14 @@ const PaymentSummary = () => {
       const userName = userEmail.split("@")[0] || "Client";
 
       // BACKEND API
-      const response = await axios.post(
-        `${process.env.REACT_APP_API_URL || "https://57yp657i65.execute-api.ap-south-1.amazonaws.com/staging/api"}/payment/generate-hash`,
+    const response = await axios.post(
+        "http://localhost:5000/api/payment/generate-hash",
         {
-          application_id: Number(applicationId),
+          application_id: 1,
 
           txnid,
           amount: total.toFixed(2),
-          firstname: userName,
+            firstname: userName,
           email: userEmail,
           phone: userPhone,
           productinfo: "Trading and Demat Account Opening",

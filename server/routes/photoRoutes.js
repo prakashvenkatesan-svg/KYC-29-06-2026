@@ -13,6 +13,129 @@ const MIME_EXTENSION_MAP = {
   "image/webp": "webp",
 };
 
+let applicantPhotoColumnsCache = null;
+
+const getApplicantPhotoColumns = async () => {
+  if (applicantPhotoColumnsCache) {
+    return applicantPhotoColumnsCache;
+  }
+
+  const result = await pool.query(
+    `
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'applicant_photo_uploads'
+    `,
+  );
+
+  applicantPhotoColumnsCache = new Set(
+    result.rows.map((row) => row.column_name),
+  );
+
+  return applicantPhotoColumnsCache;
+};
+
+const hasColumn = (columns, columnName) => columns.has(columnName);
+
+const buildApplicantPhotoMutationPayload = ({
+  columns,
+  applicationId,
+  fileName,
+  mimeType,
+  relativeFilePath,
+  image,
+}) => {
+  const values = {
+    application_id: applicationId,
+  };
+
+  if (hasColumn(columns, "file_name")) {
+    values.file_name = fileName;
+  }
+
+  if (hasColumn(columns, "file_type")) {
+    values.file_type = mimeType;
+  }
+
+  if (hasColumn(columns, "file_path")) {
+    values.file_path = relativeFilePath;
+  }
+
+  if (hasColumn(columns, "photo_base64")) {
+    values.photo_base64 = image;
+  }
+
+  if (hasColumn(columns, "updated_at")) {
+    values.updated_at = "__NOW__";
+  }
+
+  return values;
+};
+
+const buildApplicantPhotoUpdateQuery = (values) => {
+  const keys = Object.keys(values).filter((key) => key !== "application_id");
+  const params = [values.application_id];
+
+  const assignments = keys.map((key) => {
+    const value = values[key];
+
+    if (value === "__NOW__") {
+      return `${key} = NOW()`;
+    }
+
+    params.push(value);
+    return `${key} = $${params.length}`;
+  });
+
+  return {
+    text: `
+      UPDATE public.applicant_photo_uploads
+      SET ${assignments.join(", ")}
+      WHERE application_id = $1
+      RETURNING *
+    `,
+    values: params,
+  };
+};
+
+const buildApplicantPhotoInsertQuery = (values, columns) => {
+  const keys = Object.keys(values);
+  const params = [];
+
+  const placeholders = keys.map((key) => {
+    const value = values[key];
+
+    if (value === "__NOW__") {
+      return "NOW()";
+    }
+
+    params.push(value);
+    return `$${params.length}`;
+  });
+
+  if (
+    hasColumn(columns, "created_at") &&
+    !keys.includes("created_at")
+  ) {
+    keys.push("created_at");
+    placeholders.push("NOW()");
+  }
+
+  return {
+    text: `
+      INSERT INTO public.applicant_photo_uploads (
+        ${keys.join(", ")}
+      )
+      VALUES (
+        ${placeholders.join(", ")}
+      )
+      RETURNING *
+    `,
+    values: params,
+  };
+};
+
 router.post("/upload", async (req, res) => {
   try {
     const { image, application_id: applicationIdRaw } = req.body;
@@ -87,26 +210,26 @@ router.post("/upload", async (req, res) => {
     // Upload to S3 if configured (with error tolerance)
     await uploadToS3("clients" + relativeFilePath, imageBuffer, mimeType);
 
-    await pool.query(
-      `
-        INSERT INTO public.applicant_photo_uploads (
-          application_id,
-          file_name,
-          file_type,
-          file_path,
-          photo_base64
-        )
-        VALUES ($1, $2, $3, $4, $5)
-        ON CONFLICT (application_id)
-        DO UPDATE SET
-          file_name = EXCLUDED.file_name,
-          file_type = EXCLUDED.file_type,
-          file_path = EXCLUDED.file_path,
-          photo_base64 = EXCLUDED.photo_base64,
-          updated_at = NOW()
-      `,
-      [applicationId, fileName, mimeType, relativeFilePath, image],
-    );
+    const applicantPhotoColumns = await getApplicantPhotoColumns();
+    const mutationValues = buildApplicantPhotoMutationPayload({
+      columns: applicantPhotoColumns,
+      applicationId,
+      fileName,
+      mimeType,
+      relativeFilePath,
+      image,
+    });
+
+    const updateQuery = buildApplicantPhotoUpdateQuery(mutationValues);
+    const updateResult = await pool.query(updateQuery.text, updateQuery.values);
+
+    if (updateResult.rows.length === 0) {
+      const insertQuery = buildApplicantPhotoInsertQuery(
+        mutationValues,
+        applicantPhotoColumns,
+      );
+      await pool.query(insertQuery.text, insertQuery.values);
+    }
 
     res.json({
       success: true,

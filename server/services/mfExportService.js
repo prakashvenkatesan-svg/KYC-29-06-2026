@@ -22,14 +22,20 @@ const isOneOf = (value, allowedValues) => allowedValues.includes(String(value ||
 const exportApplicationToMf = async (applicationId, options = {}) => {
   const client = await pool.connect();
 
-  const divPayMode = normalizeOptionalString(options.div_pay_mode);
-  const communicationMode = normalizeOptionalString(options.communication_mode);
-  const paperlessFlag = normalizeOptionalString(options.paperless_flag);
+  const divPayMode = normalizeOptionalString(
+    options.div_pay_mode || process.env.MF_DIV_PAY_MODE,
+  );
+  const communicationMode = normalizeOptionalString(
+    options.communication_mode || process.env.MF_COMMUNICATION_MODE,
+  );
+  const paperlessFlag = normalizeOptionalString(
+    options.paperless_flag || process.env.MF_PAPERLESS_FLAG,
+  );
   const mobileDeclarationFlag = normalizeOptionalString(
-    options.mobile_declaration_flag,
+    options.mobile_declaration_flag || process.env.MF_MOBILE_DECLARATION_FLAG,
   );
   const emailDeclarationFlag = normalizeOptionalString(
-    options.email_declaration_flag,
+    options.email_declaration_flag || process.env.MF_EMAIL_DECLARATION_FLAG,
   );
 
   try {

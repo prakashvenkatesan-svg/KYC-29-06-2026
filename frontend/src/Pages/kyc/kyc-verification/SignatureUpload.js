@@ -4,6 +4,7 @@ import axios from "axios";
 
 import KycStepper from "../../../Components/kyc/KycStepper";
 import signatureupload from "../../../assets/signatureupload.png";
+import { getApiBaseUrl } from "../../../services/api";
 
 
 const SignatureUpload = () => {
@@ -386,7 +387,7 @@ const SignatureUpload = () => {
     }
 
     const response = await axios.post(
-      `${process.env.REACT_APP_API_URL || "https://57yp657i65.execute-api.ap-south-1.amazonaws.com/staging/api"}/signature/upload`,
+      `${getApiBaseUrl()}/signature/upload`,
       formData,
       {
         headers: {

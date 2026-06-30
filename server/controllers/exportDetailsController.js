@@ -46,9 +46,13 @@ const postExportAllByApplicationId = async (req, res) => {
       req.body || {},
     );
 
+    const hasFailures = exportDetails.export_summary?.failed_count > 0;
+
     return res.status(200).json({
       success: true,
-      message: "All export jobs processed successfully",
+      message: hasFailures
+        ? "Export jobs processed with partial failures"
+        : "All export jobs processed successfully",
       data: exportDetails,
     });
   } catch (error) {

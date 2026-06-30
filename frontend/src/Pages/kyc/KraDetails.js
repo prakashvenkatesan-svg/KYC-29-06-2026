@@ -138,7 +138,7 @@ const KraDetails = () => {
                     ? `XXXXXXXX${String(panData.aadhaar_number)
                         .replace(/\s/g, "")
                         .slice(-4)}`
-                    : "XXXXXXXX0000"
+                    : "XXXXXXXXXXXX"
                 }
                 readOnly
               />

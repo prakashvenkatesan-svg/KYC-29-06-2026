@@ -6,6 +6,14 @@ import KycStepper from "../../../Components/kyc/KycStepper";
 
 import instructionIcon from "../../../assets/instructionIcon.png";
 
+const NET_WORTH_OPTIONS = [
+  { value: "Below 1 Lakh (Below 1,00,000)", label: "Below 1 Lakh (Below 1,00,000)" },
+  { value: "1 - 5 Lakh (1,00,000 - 5,00,000)", label: "1 - 5 Lakh (1,00,000 - 5,00,000)" },
+  { value: "5 - 10 Lakh (5,00,000 - 10,00,000)", label: "5 - 10 Lakh (5,00,000 - 10,00,000)" },
+  { value: "10 - 25 Lakh (10,00,000 - 25,00,000)", label: "10 - 25 Lakh (10,00,000 - 25,00,000)" },
+  { value: "Above 25 Lakh (Above 25,00,000)", label: "Above 25 Lakh (Above 25,00,000)" },
+];
+
 const normalizeGenderLabel = (value) => {
   const normalized = String(value || "")
     .trim()
@@ -446,13 +454,13 @@ const PersonalDetails = () => {
                       onChange={handleChange}
                     >
                       <option value='' disabled hidden>
-                        Select Your netWorth
+                        Select Net Worth
                       </option>
-                      <option value='< 1,00,000'>&lt; 1,00,000</option>
-                      <option value='1,00,000 - 5,00,000'>
-                        1,00,000 - 5,00,000
-                      </option>
-                      <option value='5,00,000+'>5,00,000+</option>
+                      {NET_WORTH_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
                     </select>
                     <label>
                       Net worth (in Rupees) <span>*</span>

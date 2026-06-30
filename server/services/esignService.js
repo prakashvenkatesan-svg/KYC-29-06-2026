@@ -8,8 +8,8 @@ const DEFAULT_ESIGN_BASE_URL =
   process.env.SETU_BASE_URL ||
   process.env.ESIGN_BASE_URL ||
   "https://dg-sandbox.setu.co";
-const FIRST_HOLDER_SIGNATURE_HEIGHT = 60;
-const FIRST_HOLDER_SIGNATURE_WIDTH = 180;
+const FIRST_HOLDER_SIGNATURE_HEIGHT = 42;
+const FIRST_HOLDER_SIGNATURE_WIDTH = 130;
 
 const buildUrl = (explicitValue, fallbackPath) => {
   if (explicitValue) {
@@ -321,7 +321,10 @@ const normalizeEsignStatus = (payload) => {
 const buildSignerPayload = (application, config, pdfResult) => {
   const contact = application.contact_details || {};
   const personal = application.personal_details || {};
-  const identity = application.identity_verifications || {};
+  const identity =
+    application.identity_verifications ||
+    application.identity_details ||
+    {};
   const signatureOnPages = resolveSignatureOnPages(
     config.signatureOnPages,
     pdfResult?.pageCount,
@@ -329,6 +332,7 @@ const buildSignerPayload = (application, config, pdfResult) => {
 
   const applicantName =
     application.applicant_name ||
+    application.kra_details?.app_name ||
     identity.full_name ||
     personal.full_name ||
     [personal.first_name, personal.middle_name, personal.last_name]
@@ -337,7 +341,12 @@ const buildSignerPayload = (application, config, pdfResult) => {
     "";
 
   const birthDateValue =
-    application.date_of_birth || identity.dob || personal.dob || "";
+    application.date_of_birth ||
+    identity.dob ||
+    identity.provider_dob ||
+    application.kra_details?.app_dob_incorp ||
+    personal.dob ||
+    "";
   const birthYearMatch = String(birthDateValue).match(/\d{4}/)?.[0] || "";
   const rawIdentifier = String(
     firstNonEmpty(

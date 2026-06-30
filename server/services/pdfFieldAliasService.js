@@ -176,6 +176,7 @@ const V3_REPEATED_FIELD_ALIASES = {
   dob: [
     "3 C DATE OF BIRTH",
     "Date of Birth",
+    "Date of birth",
     "DATE OF BIRTH",
     "FathersSpouses Name 2",
   ],
@@ -190,7 +191,6 @@ const V3_REPEATED_FIELD_ALIASES = {
     "5 B AADHAAR NO",
   ],
   client_code: [
-    "UCC",
     "Client UCC",
     "CLIENT ID",
     "CLIENT CODE UCC",

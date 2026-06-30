@@ -1,10 +1,19 @@
 const db = require("../config/db");
+const {
+  formatStateDisplayName,
+  resolveStateName,
+} = require("../services/districtResolverService");
 
 const buildKraAddress = (row) =>
   [
     row?.address_1,
     row?.address_2,
-    row?.state,
+    formatStateDisplayName(
+      resolveStateName({
+        stateCode: row?.kra_state_code,
+        stateName: row?.state,
+      }),
+    ),
     row?.pincode,
   ]
     .map((value) => String(value || "").trim())
@@ -35,10 +44,11 @@ const getPersonalDetailsPrefill = async (applicationId) => {
       dd.provider AS digilocker_provider,
       cvl.app_f_name AS kra_father_name,
       cvl.app_gen AS kra_gender,
+      COALESCE(cvl.app_per_state, cvl.app_cor_state) AS kra_state_code,
       iv.address_1,
       iv.address_2,
-      iv.state,
-      iv.pincode
+      COALESCE(NULLIF(BTRIM(iv.state), ''), NULLIF(BTRIM(cvl.app_per_state), ''), NULLIF(BTRIM(cvl.app_cor_state), '')) AS state,
+      COALESCE(NULLIF(BTRIM(iv.pincode), ''), NULLIF(BTRIM(cvl.app_per_pincd), ''), NULLIF(BTRIM(cvl.app_cor_pincd), '')) AS pincode
     FROM public.kyc_applications ka
     LEFT JOIN public.personal_details pd
       ON pd.application_id = ka.id

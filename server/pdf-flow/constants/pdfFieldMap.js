@@ -1,5 +1,6 @@
 const {
   buildBoidPdfFields,
+  getBoidOverlayConfigs,
 } = require("../../services/pdfBoidFieldService");
 const {
   getOccupationPdfValue,
@@ -17,9 +18,19 @@ const {
   getClientCodeOverlays,
 } = require("../../services/pdfClientCodeOverlayService");
 const {
+  getBankIfscOverlays,
+} = require("../../services/pdfBankOverlayService");
+const {
+  getApplicantNameOverlays,
+} = require("../../services/pdfApplicantNameOverlayService");
+const {
   buildRepeatedFieldValues,
   getTemplateCompatibilityOverlays,
 } = require("../../services/pdfFieldAliasService");
+const {
+  formatStateDisplayName,
+  resolveStateName,
+} = require("../../services/districtResolverService");
 const {
   getVerifiedIdentityDocumentClearFields,
   getVerifiedIdentityDocumentFields,
@@ -52,14 +63,47 @@ const splitAddress = (address) => {
   };
 };
 
+const getKraValue = (kra = {}, key = "") =>
+  firstNonEmpty(
+    kra?.[key],
+    kra?.[String(key || "").toUpperCase()],
+  );
+
+const hasKraAddressData = (kra = {}) =>
+  Boolean(
+    firstNonEmpty(
+      getKraValue(kra, "app_cor_add1"),
+      getKraValue(kra, "app_cor_add2"),
+      getKraValue(kra, "app_cor_add3"),
+      getKraValue(kra, "app_cor_city"),
+      getKraValue(kra, "app_cor_pincd"),
+      getKraValue(kra, "app_per_add1"),
+      getKraValue(kra, "app_per_add2"),
+      getKraValue(kra, "app_per_add3"),
+      getKraValue(kra, "app_per_city"),
+      getKraValue(kra, "app_per_pincd"),
+    ),
+  );
+
+const resolveKraStateDisplayName = (kra = {}, fallbackStateName = "") =>
+  formatStateDisplayName(
+    resolveStateName({
+      stateCode: firstNonEmpty(
+        getKraValue(kra, "app_cor_state"),
+        getKraValue(kra, "app_per_state"),
+      ),
+      stateName: fallbackStateName,
+    }),
+  );
+
 const extractKraLocalityFromAddressLines = (kra = {}) => {
   const addressLines = [
-    kra.app_cor_add3,
-    kra.app_cor_add2,
-    kra.app_cor_add1,
-    kra.app_per_add3,
-    kra.app_per_add2,
-    kra.app_per_add1,
+    getKraValue(kra, "app_cor_add3"),
+    getKraValue(kra, "app_cor_add2"),
+    getKraValue(kra, "app_cor_add1"),
+    getKraValue(kra, "app_per_add3"),
+    getKraValue(kra, "app_per_add2"),
+    getKraValue(kra, "app_per_add1"),
   ]
     .map((value) => String(value || "").trim())
     .filter(Boolean);
@@ -242,6 +286,61 @@ const mapBankAccountTypeToPdfValue = (accountType) => {
   return "";
 };
 
+const parseNumericAmount = (value) => {
+  const numeric = Number(String(value || "").replace(/[^0-9.]/g, ""));
+  return Number.isFinite(numeric) ? numeric : null;
+};
+
+const resolveAnnualIncomeBandFromNetWorth = (netWorth = "", annualIncome = "") => {
+  const normalizedAnnualIncome = String(annualIncome || "").trim().toLowerCase();
+  const normalizedNetWorth = String(netWorth || "").trim().toLowerCase();
+
+  if (normalizedAnnualIncome.includes("below 1")) return "below_1_lac";
+  if (normalizedAnnualIncome.includes("1-5")) return "1_to_5_lacs";
+  if (normalizedAnnualIncome.includes("5-10")) return "5_to_10_lacs";
+  if (normalizedAnnualIncome.includes("10-25")) return "10_to_25_lacs";
+  if (normalizedAnnualIncome.includes(">25") || normalizedAnnualIncome.includes("above 25")) {
+    return "above_25_lacs";
+  }
+
+  if (normalizedNetWorth.includes("below 1")) return "below_1_lac";
+  if (normalizedNetWorth.includes("1-5")) return "1_to_5_lacs";
+  if (normalizedNetWorth.includes("5-10")) return "5_to_10_lacs";
+  if (normalizedNetWorth.includes("10-25")) return "10_to_25_lacs";
+  if (normalizedNetWorth.includes(">25") || normalizedNetWorth.includes("above 25")) {
+    return "above_25_lacs";
+  }
+
+  const amounts = String(netWorth || "")
+    .split(/-|to/i)
+    .map((part) => parseNumericAmount(part))
+    .filter((value) => value !== null);
+
+  const comparisonValue =
+    amounts.length > 1 ? Math.max(...amounts) : amounts.length === 1 ? amounts[0] : null;
+
+  if (comparisonValue === null) {
+    return "";
+  }
+
+  if (comparisonValue < 100000) return "below_1_lac";
+  if (comparisonValue <= 500000) return "1_to_5_lacs";
+  if (comparisonValue <= 1000000) return "5_to_10_lacs";
+  if (comparisonValue <= 2500000) return "10_to_25_lacs";
+  return "above_25_lacs";
+};
+
+const isSavingsAccountType = (accountType) =>
+  ["savings", "saving"].includes(String(accountType || "").trim().toLowerCase());
+
+const isCurrentAccountType = (accountType) =>
+  String(accountType || "").trim().toLowerCase() === "current";
+
+const isOtherAccountType = (accountType) =>
+  ["others", "other", "salary", "salary account"].includes(
+    String(accountType || "").trim().toLowerCase(),
+  );
+
 const getLastFourDigits = (value) => {
   const digits = String(value || "").replace(/\D/g, "");
   return digits ? digits.slice(-4) : "";
@@ -323,6 +422,36 @@ const DEFAULT_COUNTRY_VALUE = "India";
 const resolveSelectedScheme = (value) =>
   String(value || "").trim() === "annualCare" ? "annualCare" : "lifeTime";
 
+const buildNonDigilockerVerifiedIdentityFieldOverrides = (
+  verifiedIdentitySource,
+) => {
+  if (verifiedIdentitySource === "digilocker") {
+    return {};
+  }
+
+  return {
+    "Document Type": "",
+    "Generation date": "",
+    "Download Date": "",
+    "Masked Aadhaar": "",
+    Name: "",
+    "Date of Birth": "",
+    Gender: "",
+    "C/O, S/O, D/O": "",
+    Address: "",
+    Landmark: "",
+    Locality: "",
+    "City/District": "",
+    Pincode: "",
+    State: "",
+  };
+};
+
+const buildClientCodeFieldOverrides = (clientCode = "") => ({
+  // Keep only dedicated client-code PDF fields populated.
+  "Client UCC": String(clientCode || "").trim(),
+});
+
 const buildPdfFieldPayload = (application) => {
   const contact = application.contact_details || {};
   const personal = application.personal_details || {};
@@ -387,7 +516,25 @@ const buildPdfFieldPayload = (application) => {
 
   const correspondenceAddress = splitAddress(
     verifiedIdentitySource === "kra"
-      ? buildFullName(kra.app_cor_add1, kra.app_cor_add2, kra.app_cor_add3)
+      ? firstNonEmpty(
+          hasKraAddressData(kra)
+            ? buildFullName(
+                getKraValue(kra, "app_cor_add1"),
+                getKraValue(kra, "app_cor_add2"),
+                getKraValue(kra, "app_cor_add3"),
+              )
+            : "",
+          hasKraAddressData(kra)
+            ? buildFullName(
+                getKraValue(kra, "app_per_add1"),
+                getKraValue(kra, "app_per_add2"),
+                getKraValue(kra, "app_per_add3"),
+              )
+            : "",
+          buildFullName(identity.address_1, identity.address_2),
+          personal.aadhaar_address,
+          digilocker.address,
+        )
       : personal.aadhaar_address || digilocker.address || "",
   );
   const permanentAddress = splitAddress(personal.permanent_address || personal.aadhaar_address || "");
@@ -411,6 +558,10 @@ const buildPdfFieldPayload = (application) => {
     clientCodeDetails.client_code,
     application.client_code,
   );
+  const annualIncomeBand = resolveAnnualIncomeBandFromNetWorth(
+    personal.net_worth,
+    personal.annual_income,
+  );
 
   const missingFields = [];
   if (!applicantName) missingFields.push("applicant_name");
@@ -420,8 +571,9 @@ const buildPdfFieldPayload = (application) => {
   const resolvedCorrespondenceCity =
     verifiedIdentitySource === "kra"
       ? firstNonEmpty(
-          kra.app_cor_city,
-          kra.app_per_city,
+          getKraValue(kra, "app_cor_city"),
+          getKraValue(kra, "app_per_city"),
+          identity.address_2,
           extractKraLocalityFromAddressLines(kra),
           addressFields.CITY,
           addressFields.DISTRICT,
@@ -430,24 +582,24 @@ const buildPdfFieldPayload = (application) => {
   const resolvedCorrespondenceState =
     verifiedIdentitySource === "kra"
       ? firstNonEmpty(
-          kra.app_cor_state,
-          kra.app_per_state,
+          resolveKraStateDisplayName(kra, addressFields.STATE),
           addressFields.STATE,
         )
       : addressFields.STATE;
   const resolvedCorrespondenceDistrict =
     verifiedIdentitySource === "kra"
       ? firstNonEmpty(
-          kra.app_corr_district,
-          kra.app_perm_district,
+          getKraValue(kra, "app_corr_district"),
+          getKraValue(kra, "app_perm_district"),
           addressFields.DISTRICT,
+          identity.address_2,
         )
       : addressFields.DISTRICT;
   const resolvedCorrespondencePincode =
     verifiedIdentitySource === "kra"
       ? firstNonEmpty(
-          kra.app_cor_pincd,
-          kra.app_per_pincd,
+          getKraValue(kra, "app_cor_pincd"),
+          getKraValue(kra, "app_per_pincd"),
           addressFields["PIN CODE"],
         )
       : addressFields["PIN CODE"];
@@ -468,7 +620,6 @@ const buildPdfFieldPayload = (application) => {
 
   const fields = {
     DATE: formatDate(new Date()),
-    UCC: clientCode,
     "Client UCC": clientCode,
     "CLIENT ID": clientCode,
     "CLIENT CODE UCC": clientCode,
@@ -489,11 +640,19 @@ const buildPdfFieldPayload = (application) => {
     "1 ADDRESS FOR CORRESPONDENCRESIDENCERow1": correspondenceAddress.line1,
     "1 ADDRESS FOR CORRESPONDENCRESIDENCERow2": correspondenceAddress.line2,
     CITY: resolvedCorrespondenceCity,
+    "City/District": resolvedCorrespondenceCity,
+    "CityTownVillage 1": resolvedCorrespondenceCity,
+    "TownVillage 1": resolvedCorrespondenceCity,
     DISTRICT: resolvedCorrespondenceDistrict,
+    District: resolvedCorrespondenceDistrict,
     STATE: resolvedCorrespondenceState,
+    State: resolvedCorrespondenceState,
+    "CityTownVillage 2": resolvedCorrespondenceState,
+    "TownVillage 2": resolvedCorrespondenceState,
     COUNTRY: DEFAULT_COUNTRY_VALUE,
     "PIN CODE": resolvedCorrespondencePincode,
     "Pin Code": resolvedCorrespondencePincode,
+    Pincode: resolvedCorrespondencePincode,
     PINCODE: resolvedCorrespondencePincode,
     "4 PERMANENT ADDRESS OF RESIDENT APPLICANT IF DIFFERENT FROM ABOVE B1 OR OVERSEAS ADDRESS MANDATORY FOR NONRESIDENT APPLICANTRow1":
       permanentAddress.line1,
@@ -550,6 +709,7 @@ const buildPdfFieldPayload = (application) => {
     NAME_OF_THE_APPLICANT: toUpperText(applicantName),
     "Networth in Rs": personal.net_worth || "",
     "Networth n Rs": personal.net_worth || "",
+    "TRADING EXPERIENCE": personal.trading_experience || "",
     PLACE: placeValue,
     Place: placeValue,
     place: placeValue,
@@ -609,6 +769,16 @@ const buildPdfFieldPayload = (application) => {
     }),
   );
 
+  Object.assign(
+    fields,
+    buildNonDigilockerVerifiedIdentityFieldOverrides(verifiedIdentitySource),
+  );
+
+  Object.assign(
+    fields,
+    buildClientCodeFieldOverrides(clientCode),
+  );
+
     const checkboxes = {
       "NEW KYC": true,
       Normal: verifiedIdentitySource !== "digilocker",
@@ -644,6 +814,17 @@ const buildPdfFieldPayload = (application) => {
         "HOUSEWIFE-OCC": matchesOccupation(personal.occupation, ["housewife"]),
         "STUDENT-OCC": matchesOccupation(personal.occupation, ["student"]),
         "OTHERS-OCC": matchesOccupation(personal.occupation, ["other", "others"]),
+        "BELOW 1 LAC-GAID": annualIncomeBand === "below_1_lac",
+        "1-5 LAC-GAID": annualIncomeBand === "1_to_5_lacs",
+        "5-10 LAC-GAID": annualIncomeBand === "5_to_10_lacs",
+        "10-25 LAC-GAID": annualIncomeBand === "10_to_25_lacs",
+        ">25 LAC-GAID": annualIncomeBand === "above_25_lacs",
+        SAVINGS: isSavingsAccountType(bank.account_type),
+        CURRENT: isCurrentAccountType(bank.account_type),
+        OTHERS: isOtherAccountType(bank.account_type),
+        "SAVINGS-ACC": isSavingsAccountType(bank.account_type),
+        "CURRENT-ACC": isCurrentAccountType(bank.account_type),
+        "OTHERS-ACC": isOtherAccountType(bank.account_type),
         MALE: isMaleGender(applicantGender),
     FEMALE: isFemaleGender(applicantGender),
     Others: isOtherGender(applicantGender),
@@ -685,6 +866,9 @@ const buildPdfFieldPayload = (application) => {
       ...getVerifiedIdentityDocumentOverlays(application),
       ...getContactOverlays(application),
       ...getClientCodeOverlays(application),
+      ...getBoidOverlayConfigs(application),
+      ...getApplicantNameOverlays(application),
+      ...getBankIfscOverlays(application),
       ...getDefaultSelectionOverlays(),
     ],
     missingFields,

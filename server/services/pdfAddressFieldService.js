@@ -1,6 +1,8 @@
 const firstNonEmpty = (...values) =>
   values.find((value) => String(value || "").trim() !== "") || "";
 
+const { resolveDistrict } = require("./districtResolverService");
+
 const splitAddress = (address) =>
   String(address || "")
     .split(/\r?\n|,/)
@@ -49,6 +51,19 @@ const INDIAN_STATES_AND_UTS = [
 const escapeRegex = (value) =>
   String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+const getAddressSegmentsBeforeState = (address = "", matchedState = "") => {
+  const withoutPincode = String(address || "").replace(/\b\d{6}\b/g, "").trim();
+  const withoutCountry = withoutPincode.replace(/\bIndia\b/gi, "").trim();
+  const beforeState = matchedState
+    ? withoutCountry.replace(new RegExp(`\\b${escapeRegex(matchedState)}\\b`, "i"), "").trim()
+    : withoutCountry;
+
+  return beforeState
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+};
+
 const parseIndianAddressTail = (address) => {
   const normalized = String(address || "")
     .replace(/\s+/g, " ")
@@ -82,10 +97,8 @@ const parseIndianAddressTail = (address) => {
     };
   }
 
-  const beforeState = withoutCountry
-    .replace(new RegExp(`\\b${escapeRegex(matchedState)}\\b`, "i"), "")
-    .trim();
-  const tailToken = beforeState.split(/\s+/).filter(Boolean).slice(-1)[0] || "";
+  const addressSegments = getAddressSegmentsBeforeState(normalized, matchedState);
+  const tailToken = addressSegments.slice(-1)[0] || "";
 
   return {
     city: tailToken,
@@ -103,15 +116,27 @@ const buildPdfAddressFields = (application) => {
   const identityAddress1 = String(identity.address_1 || "").trim();
   const identityAddress2 = String(identity.address_2 || "").trim();
   const parsedAadhaarAddress = parseIndianAddressTail(personal.aadhaar_address);
+  const resolvedDistrict = resolveDistrict({
+    district: personal.district,
+    pincode: firstNonEmpty(
+      personal.pincode,
+      identity.pincode,
+      parsedAadhaarAddress.pincode,
+    ),
+    city: identityAddress2,
+    stateName: firstNonEmpty(personal.state, identity.state),
+  }).district;
 
   const district = firstNonEmpty(
     personal.district,
+    resolvedDistrict,
     identityAddress2,
     parsedAadhaarAddress.district,
     aadhaarAddressParts[1],
   );
   const city = firstNonEmpty(
     personal.city,
+    identityAddress2,
     parsedAadhaarAddress.city,
     district,
     identityAddress2,

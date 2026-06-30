@@ -64,9 +64,20 @@ const getDpIdFromBoid = (boid = "") => {
   return normalizedBoid.slice(0, 8);
 };
 
+const getClientIdFromBoid = (boid = "") => {
+  const normalizedBoid = String(boid || "").replace(/\D/g, "");
+
+  if (normalizedBoid.length < 16) {
+    return "";
+  }
+
+  return normalizedBoid.slice(-8);
+};
+
 const buildBoidPdfFields = (application) => {
   const boid = String(application?.boid || "").trim();
   const dpId = getDpIdFromBoid(boid);
+  const clientId = getClientIdFromBoid(boid);
 
   const fieldNames = parseConfiguredFieldNames(
     process.env.ACCOUNT_OPENING_BOID_FIELD_NAMES,
@@ -91,25 +102,53 @@ const buildBoidPdfFields = (application) => {
     fields["DP ID"] = dpId;
   }
 
+  if (clientId) {
+    fields["DP ID CLIENT ID"] = clientId;
+  }
+
   return fields;
 };
 
 const getBoidOverlayConfigs = (application) => {
   const boid = String(application?.boid || "").trim();
-
-  if (!boid) {
-    return [];
-  }
+  const dpId = getDpIdFromBoid(boid);
+  const clientId = getClientIdFromBoid(boid);
 
   const configuredValue =
     process.env.ACCOUNT_OPENING_BOID_OVERLAYS ||
     process.env.ACCOUNT_OPENING_BOID_OVERLAY ||
     "";
 
-  return parseCoordinateConfigs(configuredValue).map((overlay) => ({
+  const configuredOverlays = parseCoordinateConfigs(configuredValue).map((overlay) => ({
     ...overlay,
     text: boid,
   }));
+
+  const nominationOverlays = [];
+
+  if (dpId) {
+    nominationOverlays.push({
+      // Template visible page 9 nomination header DP ID box
+      pageIndex: 14,
+      x: 365,
+      y: 724,
+      size: 9,
+      text: dpId,
+    });
+  }
+
+  if (clientId) {
+    nominationOverlays.push({
+      // Template visible page 9 nomination header Client ID box
+      pageIndex: 14,
+      x: 487,
+      y: 724,
+      size: 9,
+      text: clientId,
+    });
+  }
+
+  return [...configuredOverlays, ...nominationOverlays];
 };
 
 const getBoidOverlayConfig = (application) =>

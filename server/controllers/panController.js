@@ -2,6 +2,11 @@ const {
   getPanStatusFromKRA,
   fetchPanDetailsFromKRA,
 } = require("../services/cvlKraService");
+const {
+  formatStateDisplayName,
+  resolveDistrictAsync,
+  resolveStateName,
+} = require("../services/districtResolverService");
 
 const pool = require("../config/db");
 const masterPool = require("../config/masterDb");
@@ -59,15 +64,9 @@ function getGenderText(code) {
 
 /* STATE */
 function getStateName(code) {
-  const stateMap = {
-    33: "Tamil Nadu",
-    36: "Telangana",
-    29: "Karnataka",
-    27: "Maharashtra",
-    7: "Delhi",
-  };
-
-  return stateMap[Number(code)] || String(code || "");
+  return formatStateDisplayName(
+    resolveStateName({ stateCode: code }) || String(code || ""),
+  );
 }
 
 function normalizeAadhaarValue(value) {
@@ -275,6 +274,15 @@ const verifyPan = async (req, res) => {
 
     /* STEP 3 - IF KRA EXISTS */
     if (isKraRegistered) {
+      const resolvedStateName = getStateName(kycData.APP_PER_STATE || kycData.APP_COR_STATE);
+      const resolvedDistrict = await resolveDistrictAsync({
+        pincode: String(kycData.APP_PER_PINCD || kycData.APP_COR_PINCD || ""),
+        city: kycData.APP_PER_CITY || kycData.APP_COR_CITY || kycData.APP_PER_ADD2 || "",
+        stateCode: kycData.APP_PER_STATE || kycData.APP_COR_STATE || "",
+        stateName: resolvedStateName,
+        countryCode: kycData.APP_PER_CTRY || kycData.APP_COR_CTRY || "101",
+      });
+
       const formattedData = {
         pan: kycData.APP_PAN_NO || "",
 
@@ -294,9 +302,13 @@ const verifyPan = async (req, res) => {
 
         address_2: kycData.APP_PER_ADD2 || "",
 
-        state: getStateName(kycData.APP_PER_STATE),
+        city: kycData.APP_PER_CITY || kycData.APP_COR_CITY || "",
 
-        pincode: String(kycData.APP_PER_PINCD || ""),
+        district: resolvedDistrict.district,
+
+        state: resolvedStateName,
+
+        pincode: String(kycData.APP_PER_PINCD || kycData.APP_COR_PINCD || ""),
 
         aadhaar_number: normalizeAadhaarValue(kycData.APP_CORR_AADHAR_NO),
 

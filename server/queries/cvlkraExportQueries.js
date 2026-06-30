@@ -424,8 +424,8 @@ const buildCvlkraSourceCte = () => `
         ELSE NULL
       END AS app_email_flg,
       NULL::text AS app_otp_refno,
-      NULL::text AS app_perm_district,
-      NULL::text AS app_corr_district,
+      NULLIF(BTRIM(overrides.data->>'app_perm_district'), '') AS app_perm_district,
+      NULLIF(BTRIM(overrides.data->>'app_corr_district'), '') AS app_corr_district,
       jsonb_build_object(
         'header',
         jsonb_build_object(
@@ -460,13 +460,15 @@ const buildCvlkraSourceCte = () => `
           'app_cor_city', 'identity_verifications.address_2',
           'app_cor_state', 'identity_verifications.state -> CVLKRA numeric state code',
           'app_cor_pincd', 'identity_verifications.pincode',
+          'app_corr_district', 'derived from pincode/state/city fallback before export upsert',
           'app_email', 'contact_details.email',
           'app_mob_no', 'contact_details.mobile_number',
           'app_mobile_flg', 'contact_details.mobile_verified -> Y/N',
           'app_email_flg', 'contact_details.email_verified -> Y/N',
           'app_uid_no', 'identity_verifications.aadhaar_number -> last 4 digits when full numeric',
           'app_cor_add_ref', 'identity_verifications.aadhaar_number -> last 4 digits when full numeric',
-          'app_per_add_ref', 'identity_verifications.aadhaar_number -> last 4 digits when full numeric'
+          'app_per_add_ref', 'identity_verifications.aadhaar_number -> last 4 digits when full numeric',
+          'app_perm_district', 'derived from pincode/state/city fallback before export upsert'
         ),
         'overrides',
         overrides.data,

@@ -1,4 +1,5 @@
 const pool = require("../config/db");
+const { resolveDistrictAsync } = require("./districtResolverService");
 const {
   getCvlkraSourceByApplicationIdQuery,
   checkCvlkraApplicationIdUniqueIndexQuery,
@@ -86,6 +87,40 @@ const exportApplicationToCvlkra = async (applicationId, options = {}) => {
       );
     }
 
+    const [resolvedCorrespondenceDistrict, resolvedPermanentDistrict] =
+      await Promise.all([
+        resolveDistrictAsync({
+          district:
+            normalizeOptionalString(overrides.app_corr_district) ||
+            sourceRow.app_corr_district,
+          pincode: sourceRow.app_cor_pincd,
+          city: sourceRow.app_cor_city,
+          stateCode: sourceRow.app_cor_state,
+          countryCode: sourceRow.app_cor_ctry,
+        }),
+        resolveDistrictAsync({
+          district:
+            normalizeOptionalString(overrides.app_perm_district) ||
+            sourceRow.app_perm_district,
+          pincode: sourceRow.app_per_pincd,
+          city: sourceRow.app_per_city,
+          stateCode: sourceRow.app_per_state,
+          countryCode: sourceRow.app_per_ctry,
+        }),
+      ]);
+
+    const enrichedOverrides = {
+      ...overrides,
+      app_corr_district: resolvedCorrespondenceDistrict.district,
+      app_perm_district: resolvedPermanentDistrict.district,
+    };
+
+    const resolvedSourceResult = await client.query(getCvlkraSourceByApplicationIdQuery, [
+      applicationId,
+      JSON.stringify(enrichedOverrides),
+    ]);
+    const resolvedSourceRow = resolvedSourceResult.rows[0];
+
     const mandatoryFields = [
       { key: "company_code", label: "company code" },
       { key: "batch_date", label: "batch date" },
@@ -120,7 +155,7 @@ const exportApplicationToCvlkra = async (applicationId, options = {}) => {
     ];
 
     const missingFields = mandatoryFields
-      .filter(({ key }) => !String(sourceRow[key] || "").trim())
+      .filter(({ key }) => !String(resolvedSourceRow[key] || "").trim())
       .map(({ label }) => label);
 
     if (missingFields.length > 0) {
@@ -134,7 +169,7 @@ const exportApplicationToCvlkra = async (applicationId, options = {}) => {
 
     const upsertResult = await client.query(upsertCvlkraDataByApplicationIdQuery, [
       applicationId,
-      JSON.stringify(overrides),
+      JSON.stringify(enrichedOverrides),
     ]);
     const cvlkraRow = upsertResult.rows[0];
 

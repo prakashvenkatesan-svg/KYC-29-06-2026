@@ -1,4 +1,8 @@
 const normalizeLowerText = (value) => String(value || "").trim().toLowerCase();
+const {
+  formatStateDisplayName,
+  resolveStateName,
+} = require("./districtResolverService");
 
 const firstNonEmpty = (...values) =>
   values.find((value) => String(value || "").trim() !== "") || "";
@@ -157,39 +161,86 @@ const wrapText = (value, maxLength = 36) => {
   return lines;
 };
 
+const dedupeAddressParts = (values = []) => {
+  const seen = new Set();
+
+  return values.filter((value) => {
+    const normalizedValue = String(value || "").trim();
+
+    if (!normalizedValue) {
+      return false;
+    }
+
+    const dedupeKey = normalizedValue.toUpperCase();
+    if (seen.has(dedupeKey)) {
+      return false;
+    }
+
+    seen.add(dedupeKey);
+    return true;
+  });
+};
+
+const buildSecondaryAddressLine = (...values) =>
+  dedupeAddressParts(
+    values
+      .flatMap((value) => String(value || "").split(","))
+      .map((part) => part.trim())
+      .filter(Boolean),
+  ).join(", ");
+
+const isSameAddressPart = (left, right) =>
+  String(left || "").trim().toUpperCase() === String(right || "").trim().toUpperCase();
+
+const resolveKraStateDisplayName = (...values) =>
+  formatStateDisplayName(
+    resolveStateName({
+      stateCode: values.find((value) => /^\d{1,3}$/.test(String(value || "").trim())) || "",
+      stateName: values.find((value) => /[A-Za-z]/.test(String(value || "").trim())) || "",
+    }),
+  );
+
 const buildKraAddressText = (kra = {}, identity = {}) => {
+  const correspondenceState = resolveKraStateDisplayName(
+    kra.app_cor_state,
+    kra.app_per_state,
+    identity.state,
+  );
   const correspondenceAddress = [
     kra.app_cor_add1,
     kra.app_cor_add2,
     kra.app_cor_add3,
     kra.app_cor_city,
-    kra.app_cor_state,
+    correspondenceState,
     kra.app_cor_pincd,
     kra.app_cor_ctry,
-  ]
-    .map((value) => String(value || "").trim())
-    .filter(Boolean)
+  ];
+  const correspondenceAddressText = dedupeAddressParts(correspondenceAddress)
     .join(", ");
 
-  if (correspondenceAddress) {
-    return correspondenceAddress;
+  if (correspondenceAddressText) {
+    return correspondenceAddressText;
   }
 
+  const permanentState = resolveKraStateDisplayName(
+    kra.app_per_state,
+    kra.app_cor_state,
+    identity.state,
+  );
   const permanentAddress = [
     kra.app_per_add1,
     kra.app_per_add2,
     kra.app_per_add3,
     kra.app_per_city,
-    kra.app_per_state,
+    permanentState,
     kra.app_per_pincd,
     kra.app_per_ctry,
-  ]
-    .map((value) => String(value || "").trim())
-    .filter(Boolean)
+  ];
+  const permanentAddressText = dedupeAddressParts(permanentAddress)
     .join(", ");
 
-  if (permanentAddress) {
-    return permanentAddress;
+  if (permanentAddressText) {
+    return permanentAddressText;
   }
 
   return [
@@ -204,26 +255,50 @@ const buildKraAddressText = (kra = {}, identity = {}) => {
 };
 
 const buildKraAddressLines = (kra = {}, identity = {}) => {
+  const correspondenceState = resolveKraStateDisplayName(
+    kra.app_cor_state,
+    kra.app_per_state,
+    identity.state,
+  );
+  const correspondenceSecondaryLine = buildSecondaryAddressLine(
+    kra.app_cor_add2,
+    kra.app_cor_add3,
+  );
   const correspondenceLines = [
     firstNonEmpty(kra.app_cor_add1),
-    [kra.app_cor_add2, kra.app_cor_add3].map((value) => String(value || "").trim()).filter(Boolean).join(", "),
-    [kra.app_cor_city, kra.app_cor_state, kra.app_cor_pincd]
-      .map((value) => String(value || "").trim())
-      .filter(Boolean)
-      .join(", "),
+    correspondenceSecondaryLine,
+    dedupeAddressParts([
+      isSameAddressPart(correspondenceSecondaryLine, kra.app_cor_city)
+        ? ""
+        : kra.app_cor_city,
+      correspondenceState,
+      kra.app_cor_pincd,
+    ]).join(", "),
   ].filter((value) => String(value || "").trim() !== "");
 
   if (correspondenceLines.length > 0) {
     return correspondenceLines;
   }
 
+  const permanentState = resolveKraStateDisplayName(
+    kra.app_per_state,
+    kra.app_cor_state,
+    identity.state,
+  );
+  const permanentSecondaryLine = buildSecondaryAddressLine(
+    kra.app_per_add2,
+    kra.app_per_add3,
+  );
   const permanentLines = [
     firstNonEmpty(kra.app_per_add1),
-    [kra.app_per_add2, kra.app_per_add3].map((value) => String(value || "").trim()).filter(Boolean).join(", "),
-    [kra.app_per_city, kra.app_per_state, kra.app_per_pincd]
-      .map((value) => String(value || "").trim())
-      .filter(Boolean)
-      .join(", "),
+    permanentSecondaryLine,
+    dedupeAddressParts([
+      isSameAddressPart(permanentSecondaryLine, kra.app_per_city)
+        ? ""
+        : kra.app_per_city,
+      permanentState,
+      kra.app_per_pincd,
+    ]).join(", "),
   ].filter((value) => String(value || "").trim() !== "");
 
   if (permanentLines.length > 0) {

@@ -9,6 +9,41 @@ const { sendKycCompletionMail } = require("./mailService");
 const COMPLETION_EMAIL_LOCK_NAMESPACE = 250625;
 const PROJECT_ROOT = path.join(__dirname, "..", "..");
 
+const buildAlternativeAbsolutePaths = (absolutePath) => {
+  const normalizedAbsolutePath = String(absolutePath || "").trim();
+
+  if (!normalizedAbsolutePath) {
+    return [];
+  }
+
+  const normalizedSlashesPath = normalizedAbsolutePath.replace(/\//g, "\\");
+  const candidatePaths = new Set([normalizedAbsolutePath]);
+  const serverSegment = `${path.sep}server${path.sep}`;
+  const uploadsSegment = `${path.sep}uploads${path.sep}`;
+
+  const serverIndex = normalizedSlashesPath.lastIndexOf(serverSegment);
+  if (serverIndex >= 0) {
+    candidatePaths.add(
+      path.join(
+        PROJECT_ROOT,
+        normalizedSlashesPath.slice(serverIndex + 1),
+      ),
+    );
+  }
+
+  const uploadsIndex = normalizedSlashesPath.lastIndexOf(uploadsSegment);
+  if (uploadsIndex >= 0) {
+    candidatePaths.add(
+      path.join(
+        PROJECT_ROOT,
+        normalizedSlashesPath.slice(uploadsIndex + 1),
+      ),
+    );
+  }
+
+  return [...candidatePaths];
+};
+
 const resolveAbsolutePath = (inputPath = "") => {
   const normalizedPath = String(inputPath || "").trim();
 
@@ -17,21 +52,29 @@ const resolveAbsolutePath = (inputPath = "") => {
   }
 
   if (path.isAbsolute(normalizedPath)) {
-    return normalizedPath;
+    return buildAlternativeAbsolutePaths(normalizedPath);
   }
 
-  return path.join(PROJECT_ROOT, normalizedPath.replace(/^[/\\]+/, ""));
+  return [path.join(PROJECT_ROOT, normalizedPath.replace(/^[/\\]+/, ""))];
 };
 
 const ensureReadableFile = async (inputPath = "") => {
-  const absolutePath = resolveAbsolutePath(inputPath);
+  const absolutePaths = resolveAbsolutePath(inputPath);
 
-  if (!absolutePath) {
+  if (!absolutePaths.length) {
     return "";
   }
 
-  await fs.access(absolutePath);
-  return absolutePath;
+  for (const absolutePath of absolutePaths) {
+    try {
+      await fs.access(absolutePath);
+      return absolutePath;
+    } catch (error) {
+      // Try next equivalent path.
+    }
+  }
+
+  throw new Error(`File is not readable: ${inputPath}`);
 };
 
 const fetchApplicationDetail = async (applicationId) => {

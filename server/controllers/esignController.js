@@ -341,7 +341,12 @@ const getEsignStatus = async (req, res) => {
 
     const savedRecord = await updateEsignRecord(applicationId, updates);
 
-    if (statusResult.rawStatus === "sign_complete") {
+    const shouldRunCompletionSideEffects =
+      statusResult.rawStatus === "sign_complete" ||
+      savedRecord?.esign_status === "completed" ||
+      application.esign_status === "completed";
+
+    if (shouldRunCompletionSideEffects) {
       try {
         await markStampPaperUsedAfterEsign(applicationId);
         await markAllocatedBoidUsed(applicationId, application.boid);
@@ -363,7 +368,7 @@ const getEsignStatus = async (req, res) => {
         signed_pdf_path:
           savedRecord?.esign_signed_pdf_path || signedDocumentPath || "",
         signed_pdf_download_url:
-          statusResult.rawStatus === "sign_complete"
+          shouldRunCompletionSideEffects
             ? `/api/esign/applications/${applicationId}/signed-pdf`
             : "",
         provider_response: statusResult.providerPayload,

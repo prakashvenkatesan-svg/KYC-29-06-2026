@@ -13,8 +13,10 @@ const {
 
   // getResumeStatus,
   // resetTestApplication,
-  // createContactEnquiry,
 } = require("../controllers/contactController");
+const {
+  createContactEnquiry,
+} = require("../controllers/contactEnquiryController");
 
 router.post("/start", createNumberRegistration);
 router.post("/verify-mobile-otp", verifyMobileOtp);
@@ -29,6 +31,6 @@ router.get("/applications/:application_id/pdf", downloadApplicationPdf);
 
 // router.get("/resume/:application_id", getResumeStatus);
 // router.delete("/applications/:application_id/test-reset", resetTestApplication);
-// router.post("/enquiries", createContactEnquiry);
+router.post("/enquiries", createContactEnquiry);
 
 module.exports = router;

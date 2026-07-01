@@ -234,7 +234,6 @@ h2 {
   border-bottom-right-radius: 25px;
   min-height: 580px;
   height: auto;
-
 }
 
 /* Smooth Gradient Animation */
@@ -2350,9 +2349,9 @@ th {
   margin-bottom: 10px;
 }
 
-.lock-icon {
-  font-size: 42px;
-  line-height: 1;
+.headerimg {
+  width: 40px;
+  height: 40px;
 }
 
 .popup-title {
@@ -2374,6 +2373,23 @@ th {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  min-width: 330px;
+  max-width: 100%;
+  padding: 16px 26px;
+  border-radius: 40px;
+  background: linear-gradient(90deg, #1238ff 0%, #ff5c83 100%);
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 18px;
+  line-height: 1.2;
+}
+
+.proof-box {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
   min-width: 330px;
   max-width: 100%;
   padding: 16px 26px;
@@ -2410,6 +2426,28 @@ th {
   font-size: 16px;
   color: #000000;
   text-align: center;
+}
+
+.calendarimg {
+  width: 18px;
+  height: 18px;
+}
+
+.proofimage {
+  width: 17px;
+  height: 17px;
+}
+
+.proof-heading {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 15px;
+  text-decoration: underline;
+}
+
+.proof-text {
+  font-size: 14px;
+  font-weight: 400;
 }
 
 .popup-card h4 {
@@ -2671,6 +2709,16 @@ th {
   height: 30px;
 }
 
+.iconimage {
+  width: 20px;
+  height: 20px;
+}
+
+.iconimage-white {
+  width: 20px;
+  height: 20px;
+}
+
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -2779,107 +2827,177 @@ th {
   display: block;
   margin: auto;
 }
+/* Standing Instructions popup */
+.standing-instruction-trigger {
+  display: inline-flex;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
 
-/* Full screen dark background */
-.risk-pdf-overlay {
+.standing-instruction-trigger p {
+  color: #fe667c;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.standing-completed-text {
+  display: block;
+  margin-top: 2px;
+  color: #138a3d;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.standing-popup-overlay {
   position: fixed;
+  z-index: 9999;
   inset: 0;
-  z-index: 99999;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
-  padding: 20px;
-  background: rgba(0, 0, 0, 0.6);
+  padding: 18px;
+  background: rgba(0, 0, 0, 0.58);
 }
 
-/* PDF white container */
-.risk-pdf-modal {
-  width: min(950px, 100%);
-  height: min(88dvh, 850px);
-
-  display: flex;
-  flex-direction: column;
-
-  overflow: hidden;
-  border-radius: 16px;
+.standing-popup-card {
+  width: min(920px, 100%);
+  max-height: 92vh;
+  overflow-y: auto;
+  border-radius: 14px;
   background: #ffffff;
-  box-shadow: 0 18px 55px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 16px 46px rgba(0, 0, 0, 0.26);
 }
 
-/* Top heading and X button */
-.risk-pdf-header {
+.standing-popup-header {
   display: flex;
+  min-height: 58px;
   align-items: center;
   justify-content: space-between;
-
-  flex-shrink: 0;
-  padding: 15px 20px;
-  border-bottom: 1px solid #e6e6e6;
+  padding: 14px 20px;
+  border-radius: 14px 14px 0 0;
+  color: #ffffff;
+  background: linear-gradient(90deg, #1238ff, #7538ce, #f65f7b);
 }
 
-.risk-pdf-header h4 {
-  margin: 0;
-  color: #173cff;
+.standing-popup-header h4 {
   font-size: 18px;
   font-weight: 700;
 }
 
-.risk-pdf-close {
-  width: 34px;
-  height: 34px;
-  padding: 0;
+.mandatory-star {
+  color: #ff1a39;
+}
 
-  display: flex;
+.standing-info-icon {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
   align-items: center;
   justify-content: center;
-
-  border: none;
   border-radius: 50%;
-  background: #ffe8ec;
-  color: #dc2e47;
-  font-size: 25px;
+  background: #ffffff;
+  color: #1438ff;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.standing-popup-close {
+  border: 0;
+  background: transparent;
+  color: #ffffff;
+  font-size: 30px;
   line-height: 1;
   cursor: pointer;
 }
 
-/* PDF visible section */
-.risk-pdf-viewer {
-  flex: 1;
-  min-height: 0;
-  background: #f4f5f8;
+.standing-popup-body {
+  padding: 18px 24px 6px;
 }
 
-.risk-pdf-frame {
+.standing-row {
+  display: grid;
+  grid-template-columns: minmax(330px, 1fr) minmax(250px, 280px);
+  gap: 28px;
+  align-items: center;
+  padding: 13px 0;
+}
+
+.standing-question {
+  color: #212121;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.standing-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 30px;
+}
+
+.standing-options-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(112px, 1fr));
+  gap: 12px 18px;
+}
+
+.standing-options label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: #242424;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.standing-options input[type="radio"] {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: #1238ff;
+}
+
+.standing-error {
   display: block;
-  width: 100%;
-  height: 100%;
-  border: none;
+  margin-top: 5px;
+  color: #d72828;
+  font-size: 12px;
+  font-weight: 600;
 }
 
-/* Bottom Close button */
-.risk-pdf-footer {
+.standing-popup-footer {
   display: flex;
   justify-content: center;
-  flex-shrink: 0;
-
-  padding: 14px 18px;
-  border-top: 1px solid #e6e6e6;
+  gap: 14px;
+  padding: 20px 24px 24px;
 }
 
-.risk-pdf-close-btn {
-  min-width: 125px;
-  min-height: 42px;
-  padding: 10px 24px;
-
-  border: none;
+.standing-submit-btn,
+.standing-clear-btn {
+  min-width: 100px;
+  height: 38px;
   border-radius: 24px;
-  background: #173cff;
-  color: #ffffff;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
   cursor: pointer;
+}
+
+.standing-submit-btn {
+  border: 1px solid #1238ff;
+  background: #1238ff;
+  color: #ffffff;
+}
+
+.standing-clear-btn {
+  border: 1px solid #1238ff;
+  background: #ffffff;
+  color: #1238ff;
 }
 
 /*NONOMINATION*/
@@ -4557,13 +4675,13 @@ th {
   }
 }
 
-
 @media (min-width: 768px) and (max-width: 991.98px) {
   .moving-gradient {
     min-height: 850px;
     height: auto;
   }
 }
+
 /* =========================================================
    MEDIUM DEVICES / TABLETS / NAVBAR
    max-width 991px
@@ -4689,6 +4807,13 @@ th {
   }
 }
 
+@media (max-width: 767.98px) {
+  .moving-gradient {
+    min-height: 100px;
+    height: auto;
+    padding-bottom: 25px;
+  }
+}
 /* =========================================================
    TABLET DEVICES
    max-width 768px
@@ -4769,14 +4894,34 @@ th {
   .aionionimg {
     display: none;
   }
-}
-@media (max-width: 767.98px) {
-  .moving-gradient {
-    min-height: 100px;
-    height: auto;
-    padding-bottom: 25px;
+  .standing-popup-overlay {
+    align-items: flex-start;
+    padding: 12px;
+  }
+
+  .standing-popup-card {
+    max-height: 96vh;
+  }
+
+  .standing-popup-body {
+    padding: 15px;
+  }
+
+  .standing-row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 15px 0;
+  }
+
+  .standing-options {
+    gap: 12px 22px;
+  }
+
+  .standing-popup-header h4 {
+    font-size: 16px;
   }
 }
+
 /* =========================================================
    TABLET / MOBILE
    max-width 767px
@@ -5491,6 +5636,9 @@ th {
   }
   .Add-nominee-btn {
     font-size: 15px;
+  }
+  .Payment-card {
+    width: auto;
   }
 }
 

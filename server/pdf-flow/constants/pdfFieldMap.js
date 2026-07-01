@@ -21,9 +21,6 @@ const {
   getBankIfscOverlays,
 } = require("../../services/pdfBankOverlayService");
 const {
-  getApplicantNameOverlays,
-} = require("../../services/pdfApplicantNameOverlayService");
-const {
   buildRepeatedFieldValues,
   getTemplateCompatibilityOverlays,
 } = require("../../services/pdfFieldAliasService");
@@ -867,7 +864,6 @@ const buildPdfFieldPayload = (application) => {
       ...getContactOverlays(application),
       ...getClientCodeOverlays(application),
       ...getBoidOverlayConfigs(application),
-      ...getApplicantNameOverlays(application),
       ...getBankIfscOverlays(application),
       ...getDefaultSelectionOverlays(),
     ],

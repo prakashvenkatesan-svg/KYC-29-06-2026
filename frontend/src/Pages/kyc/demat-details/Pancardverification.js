@@ -8,44 +8,52 @@ import Pancard from "../../../assets/Pancard.png";
 import KycStepper from "../../../Components/kyc/KycStepper";
 import KycInfoSection from "../../../Components/kyc/KycInfoSection";
 
+import lockicon from "../../../assets/lockicon.png";
+import Restriction from "../../../assets/Restriction.png";
+import phone from "../../../assets/phone.png";
+import email from "../../../assets/email.png";
+import calendar from "../../../assets/calendar.png";
+
 const formatDobInput = (value) => {
-  const digits = value.replace(/\D/g, "").slice(0, 8);
+  const digits = String(value || "")
+    .replace(/\D/g, "")
+    .slice(0, 8);
 
   if (digits.length <= 2) return digits;
   if (digits.length <= 4) return `${digits.slice(0, 2)}-${digits.slice(2)}`;
-
   return `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4)}`;
 };
 
-const parseDisplayDob = (value) => {
-  const match = /^(\d{2})-(\d{2})-(\d{4})$/.exec(value);
+const parseDobToIso = (value) => {
+  const match = String(value || "")
+    .trim()
+    .match(/^(\d{2})-(\d{2})-(\d{4})$/);
 
-  if (!match) return null;
-
-  const [, day, month, year] = match;
-  const isoValue = `${year}-${month}-${day}`;
-  const parsedDate = new Date(`${isoValue}T00:00:00`);
-
-  if (Number.isNaN(parsedDate.getTime())) return null;
-
-  if (
-    parsedDate.getDate() !== Number(day) ||
-    parsedDate.getMonth() + 1 !== Number(month) ||
-    parsedDate.getFullYear() !== Number(year)
-  ) {
-    return null;
+  if (!match) {
+    return "";
   }
 
-  return {
-    isoValue,
-    parsedDate,
-  };
+  const [, day, month, year] = match;
+  const isoDate = `${year}-${month}-${day}`;
+  const date = new Date(`${isoDate}T00:00:00`);
+
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.getFullYear() !== Number(year) ||
+    date.getMonth() + 1 !== Number(month) ||
+    date.getDate() !== Number(day)
+  ) {
+    return "";
+  }
+
+  return isoDate;
 };
 
 const Pancardverification = () => {
   const navigate = useNavigate();
 
   const [showExistingPopup, setShowExistingPopup] = useState(false);
+  const [showMinorPopup, setShowMinorPopup] = useState(false);
   const [existingClientCode, setExistingClientCode] = useState("");
 
   const [formData, setFormData] = useState({
@@ -159,13 +167,31 @@ const Pancardverification = () => {
     if (!formData.dob) {
       newErrors.dob = "Date of birth is required.";
     } else {
-      const parsedDob = parseDisplayDob(formData.dob);
+      const dobIso = parseDobToIso(formData.dob);
+      const dobDate = dobIso ? new Date(`${dobIso}T00:00:00`) : new Date("");
       const today = new Date();
 
-      if (!parsedDob) {
-        newErrors.dob = "Enter date of birth in DD-MM-YYYY format.";
-      } else if (parsedDob.parsedDate > today) {
+      if (!dobIso || Number.isNaN(dobDate.getTime())) {
+        newErrors.dob = "Enter date of birth in dd-mm-yyyy format.";
+      } else if (dobDate > today) {
         newErrors.dob = "Date of birth cannot be in the future.";
+      } else {
+        // Calculate age
+        let age = today.getFullYear() - dobDate.getFullYear();
+        const monthDiff = today.getMonth() - dobDate.getMonth();
+
+        if (
+          monthDiff < 0 ||
+          (monthDiff === 0 && today.getDate() < dobDate.getDate())
+        ) {
+          age--;
+        }
+
+        // Minor validation
+        if (age < 18) {
+          setShowMinorPopup(true);
+          newErrors.dob = "Applicants must be at least 18 years old.";
+        }
       }
     }
 
@@ -176,6 +202,11 @@ const Pancardverification = () => {
     setErrors(newErrors);
 
     return !newErrors.pan_number && !newErrors.dob && !newErrors.terms_accepted;
+  };
+
+  const handleMinorPopupClose = () => {
+    setShowMinorPopup(false);
+    navigate("/");
   };
 
   // ---------------------------------------
@@ -471,24 +502,14 @@ const Pancardverification = () => {
       setFileError("");
 
       const cleanedPan = formData.pan_number.trim().toUpperCase();
-      const parsedDob = parseDisplayDob(formData.dob);
-
-      if (!parsedDob) {
-        setErrors((previous) => ({
-          ...previous,
-          dob: "Enter date of birth in DD-MM-YYYY format.",
-        }));
-        return;
-      }
-
-      const dobForApi = parsedDob.isoValue;
+      const dobIso = parseDobToIso(formData.dob);
 
       localStorage.setItem("panNumber", cleanedPan);
 
       const verifyResponse = await api.post("/identify/verify-pan", {
         application_id: localStorage.getItem("application_id"),
         pan_number: cleanedPan,
-        dob: dobForApi,
+        dob: dobIso,
       });
 
       const result = verifyResponse.data;
@@ -530,7 +551,7 @@ const Pancardverification = () => {
       await uploadPanCard({
         applicationId,
         panNumber: cleanedPan,
-        dateOfBirth: dobForApi,
+        dateOfBirth: dobIso,
       });
 
       if (result?.isKraRegistered) {
@@ -548,7 +569,7 @@ const Pancardverification = () => {
           state: {
             incomeTaxData: result.data,
             pan_number: cleanedPan,
-            dob: dobForApi,
+            dob: formData.dob,
           },
         });
 
@@ -650,13 +671,13 @@ const Pancardverification = () => {
               <div className='date-input-container'>
                 <input
                   type='text'
-                  name='dob'
                   className='date-input'
-                  placeholder='DD-MM-YYYY'
+                  name='dob'
                   value={formData.dob}
                   onChange={handleDobChange}
+                  placeholder='dd-mm-yyyy'
                   inputMode='numeric'
-                  maxLength={10}
+                  maxLength='10'
                   disabled={loading}
                 />
               </div>
@@ -848,7 +869,7 @@ const Pancardverification = () => {
                 </label>
 
                 <div className='terms-popup'>
-                <p>
+                  <p>
                     I/We hereby declare that the KYC details furnished by me are
                     true and correct to the best of my/our knowledge and belief
                     and I/we undertake to inform you of any changes therein,
@@ -928,7 +949,7 @@ const Pancardverification = () => {
             </button>
 
             <div className='popup-icon'>
-              <span className='lock-icon'>🔐</span>
+              <img src={lockicon} alt='lockicon' className='headerimg' />
             </div>
 
             <h4 className='popup-title'>Account Already Exists</h4>
@@ -946,14 +967,52 @@ const Pancardverification = () => {
             </p>
 
             <div className='popup-help-row'>
-              <span className='popup-help-icon'>☎</span>
+              <img src={phone} alt='lockicon' className='popup-help-icon' />
               <span>(+91) 92402 62108</span>
             </div>
 
             <div className='popup-help-row'>
-              <span className='popup-help-icon'>✉</span>
+              <img src={email} alt='lockicon' className='popup-help-icon' />
               <span>clientcare@aionioncapital.com</span>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showMinorPopup && (
+        <div className='popup-overlay'>
+          <div className='popup-card-result'>
+            <button
+              type='button'
+              className='popup-close-result'
+              onClick={handleMinorPopupClose}
+            >
+              ×
+            </button>
+
+            <div className='popup-icon'>
+              <img src={Restriction} alt='Restriction' className='headerimg' />
+            </div>
+
+            <h4 className='popup-title'>Age Restriction</h4>
+
+            <p className='popup-message'>
+              You must be 18 years or older to proceed.
+            </p>
+
+            <div className='client-code-box'>
+              <img src={calendar} alt='calendat' className='calendarimg' />
+              Date of Birth :{" "}
+              {new Date(formData.dob).toLocaleDateString("en-GB")}
+            </div>
+
+            <p className='popup-contact-text'>
+              As per our records, you are under 18 years of age.
+            </p>
+
+            <p className='popup-contact-text'>
+              Access to this service is not allowed.
+            </p>
           </div>
         </div>
       )}

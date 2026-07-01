@@ -1,5 +1,5 @@
 import React from "react";
-import axios from "axios";
+import api from "../../../services/api";
 
 import paymentImg from "../../../assets/paymentimg.png";
 
@@ -29,14 +29,13 @@ const PaymentSummary = () => {
       const userName = userEmail.split("@")[0] || "Client";
 
       // BACKEND API
-    const response = await axios.post(
-        "http://localhost:5000/api/payment/generate-hash",
+      const response = await api.post(
+        "/payment/generate-hash",
         {
-          application_id: 1,
-
+          application_id: Number(applicationId),
           txnid,
           amount: total.toFixed(2),
-            firstname: userName,
+          firstname: userName,
           email: userEmail,
           phone: userPhone,
           productinfo: "Trading and Demat Account Opening",
@@ -46,6 +45,7 @@ const PaymentSummary = () => {
       const data = response.data;
 
       // CREATE FORM
+    
       const form = document.createElement("form");
 
       form.method = "POST";

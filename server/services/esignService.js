@@ -51,7 +51,9 @@ const resolveSignatureOnPages = (configuredPages, pageCount) => {
     })
     .filter(Boolean);
 
-  return resolvedPages.length > 0 ? resolvedPages : ["1"];
+  const filteredPages = resolvedPages.filter((page) => String(page).trim() !== "3");
+
+  return filteredPages.length > 0 ? filteredPages : ["1"];
 };
 
 const resolveFirstHolderSignatureHeight = (configuredHeight) => {
@@ -105,6 +107,14 @@ const isUsableLocation = (value) => {
   }
 
   if (/^\d+$/.test(normalized)) {
+    return false;
+  }
+
+   if (/^[A-Z]{2,3}$/.test(normalized)) {
+    return false;
+  }
+
+  if (["india", "ind", "in"].includes(normalized.toLowerCase())) {
     return false;
   }
 
@@ -361,6 +371,9 @@ const buildSignerPayload = (application, config, pdfResult) => {
     [personal.city, personal.state].filter(Boolean).join(" "),
     personal.city,
     personal.state,
+    [identity.address_2, identity.state].filter(Boolean).join(" "),
+    identity.address_2,
+    identity.state,
     personal.country_of_birth,
     config.defaultLocation,
   ];

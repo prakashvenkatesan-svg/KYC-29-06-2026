@@ -226,17 +226,16 @@ const createNumberRegistration = async (req, res) => {
       const existing = existingContactResult.rows[0];
 
       if (existing.is_completed || existing.kyc_status === "completed") {
-        await safeRollback(client);
-        return res.status(409).json({
-          success: false,
-          message: "KYC already completed for this mobile number",
-        });
-      }
-
-      applicationId = existing.application_id;
-      applicationNumber = existing.application_number;
-      currentStep = existing.current_step;
-      kycStatus = existing.kyc_status;
+        applicationId = null;
+        applicationNumber = null;
+        currentStep = null;
+        kycStatus = null;
+        contactRow = null;
+      } else {
+        applicationId = existing.application_id;
+        applicationNumber = existing.application_number;
+        currentStep = existing.current_step;
+        kycStatus = existing.kyc_status;
 
 const updatedContact = await client.query(
   `
@@ -250,8 +249,11 @@ const updatedContact = await client.query(
   [applicationId, terms_accepted],
 );
 
-      contactRow = updatedContact.rows[0];
-    } else {
+        contactRow = updatedContact.rows[0];
+      }
+    }
+
+    if (!contactRow) {
       const applicationResult = await client.query(
         `
         INSERT INTO public.kyc_applications
@@ -730,12 +732,7 @@ const updateMobileNumber = async (req, res) => {
         (appCheck.rows[0].kyc_status === "completed" ||
           appCheck.rows[0].is_completed)
       ) {
-        await safeRollback(client);
-        return res.status(409).json({
-          success: false,
-          message:
-            "Another completed KYC already exists with this mobile number",
-        });
+        // Allow the flow to continue; completed-user handling is centralized downstream.
       }
     }
 

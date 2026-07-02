@@ -1,7 +1,7 @@
 const fs = require("fs");
 const fsp = require("fs/promises");
 const path = require("path");
-const { PDFDocument, PDFName, StandardFonts } = require("pdf-lib");
+const { PDFDocument, StandardFonts, rgb } = require("pdf-lib");
 
 const DEFAULT_FILLED_FONT_SIZE = Number(
   process.env.ACCOUNT_OPENING_FILLED_FONT_SIZE || "7",
@@ -160,9 +160,9 @@ const getFieldWidgetRects = (pdfDoc, form, fieldName) => {
     .filter(Boolean);
 };
 
-const drawPdfOverlay = (pdfDoc, overlay, textFont) => {
+const drawPdfOverlay = (pdfDoc, form, overlay, textFont) => {
   if (!overlay || !overlay.text) {
-    if (!["check", "fieldImage", "image"].includes(overlay?.kind)) {
+    if (!["check", "fieldImage", "image", "erase", "eraseField"].includes(overlay?.kind)) {
       return;
     }
   }
@@ -194,6 +194,44 @@ const drawPdfOverlay = (pdfDoc, overlay, textFont) => {
       end: { x: x + width * 0.82, y: y + height * 0.78 },
       thickness,
     });
+    return;
+  }
+
+  if (overlay.kind === "erase") {
+    page.drawRectangle({
+      x: Number(overlay.x || 0),
+      y: Number(overlay.y || 0),
+      width: Number(overlay.width || 0),
+      height: Number(overlay.height || 0),
+      color: rgb(1, 1, 1),
+      borderColor: rgb(1, 1, 1),
+      borderWidth: 0,
+    });
+    return;
+  }
+
+  if (overlay.kind === "eraseField") {
+    const padding = Number(overlay.padding || 0);
+    const rects = getFieldWidgetRects(pdfDoc, form, overlay.fieldName);
+
+    for (const rect of rects) {
+      const targetPage = pdfDoc.getPages()[rect.pageIndex];
+
+      if (!targetPage) {
+        continue;
+      }
+
+      targetPage.drawRectangle({
+        x: Number(rect.x || 0) - padding,
+        y: Number(rect.y || 0) - padding,
+        width: Number(rect.width || 0) + padding * 2,
+        height: Number(rect.height || 0) + padding * 2,
+        color: rgb(1, 1, 1),
+        borderColor: rgb(1, 1, 1),
+        borderWidth: 0,
+      });
+    }
+
     return;
   }
 
@@ -250,7 +288,59 @@ const drawFieldImageOverlay = async (pdfDoc, form, overlay) => {
     return [];
   }
 
-  const rects = getFieldWidgetRects(pdfDoc, form, overlay.fieldName);
+  const allowedPageIndexes = Array.isArray(overlay.onlyPageIndexes)
+    ? overlay.onlyPageIndexes
+        .map((value) => Number(value))
+        .filter((value) => !Number.isNaN(value))
+    : null;
+  const excludedPageIndexes = Array.isArray(overlay.excludePageIndexes)
+    ? overlay.excludePageIndexes
+        .map((value) => Number(value))
+        .filter((value) => !Number.isNaN(value))
+    : [];
+  const excludedRectRanges = Array.isArray(overlay.excludeRectRanges)
+    ? overlay.excludeRectRanges
+        .map((range) => ({
+          pageIndex: Number(range?.pageIndex),
+          minY: Number(range?.minY),
+          maxY: Number(range?.maxY),
+        }))
+        .filter(
+          (range) =>
+            !Number.isNaN(range.pageIndex) &&
+            !Number.isNaN(range.minY) &&
+            !Number.isNaN(range.maxY),
+        )
+    : [];
+
+  const rects = getFieldWidgetRects(pdfDoc, form, overlay.fieldName).filter(
+    (rect) => {
+      if (
+        allowedPageIndexes &&
+        allowedPageIndexes.length > 0 &&
+        !allowedPageIndexes.includes(Number(rect.pageIndex))
+      ) {
+        return false;
+      }
+
+      if (excludedPageIndexes.includes(Number(rect.pageIndex))) {
+        return false;
+      }
+
+      if (
+        excludedRectRanges.some(
+          (range) =>
+            Number(rect.pageIndex) === range.pageIndex &&
+            Number(rect.y) >= range.minY &&
+            Number(rect.y) <= range.maxY,
+        )
+      ) {
+        return false;
+      }
+
+      return true;
+    },
+  );
   const drawJobs = [];
 
   for (const rect of rects) {
@@ -375,6 +465,7 @@ const clearPdfFieldValue = (form, fieldName) => {
 
   if (field.constructor.name === "PDFTextField") {
     field.setText("");
+    return;
   }
 };
 
@@ -462,7 +553,7 @@ const fillPdfTemplate = async ({ templatePath, outputPath, payload }) => {
       continue;
     }
 
-    drawPdfOverlay(pdfDoc, overlay, textFont);
+    drawPdfOverlay(pdfDoc, form, overlay, textFont);
   }
 
   const outputBytes = await pdfDoc.save();

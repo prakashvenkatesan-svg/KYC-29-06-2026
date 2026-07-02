@@ -191,11 +191,11 @@ router.post("/upload", async (req, res) => {
       });
     }
 
-    // Create project-root uploads/photos folder if not exists
+    // Create server/uploads/photos folder if not exists
     const isLambda = !!process.env.AWS_EXECUTION_ENV;
     const uploadDir = isLambda 
       ? "/tmp/uploads/photos" 
-      : path.join(__dirname, "../../uploads/photos");
+      : path.join(__dirname, "../uploads/photos");
 
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });

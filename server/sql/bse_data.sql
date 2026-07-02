@@ -1,0 +1,23 @@
+UPDATE public.bse_data
+SET
+  bank_name2 = COALESCE(bank_name2, ''),
+  account_no2 = COALESCE(account_no2, ''),
+  bank_name3 = COALESCE(bank_name3, ''),
+  account_no3 = COALESCE(account_no3, ''),
+  primary_or_secondary_bank3 = COALESCE(primary_or_secondary_bank3, ''),
+  bank_branch_ifsc_code4 = COALESCE(bank_branch_ifsc_code4, ''),
+  bank_name4 = COALESCE(bank_name4, ''),
+  account_no4 = COALESCE(account_no4, ''),
+  primary_or_secondary_bank4 = COALESCE(primary_or_secondary_bank4, ''),
+  bank_branch_ifsc_code5 = COALESCE(bank_branch_ifsc_code5, ''),
+  bank_name5 = COALESCE(bank_name5, ''),
+  account_no5 = COALESCE(account_no5, ''),
+  primary_or_secondary_bank5 = COALESCE(primary_or_secondary_bank5, ''),
+  depository_name4 = COALESCE(depository_name4, ''),
+  demat_id4 = COALESCE(demat_id4, ''),
+  beneficial_own_acnt_no4 = COALESCE(beneficial_own_acnt_no4, ''),
+  primary_or_secondary_dp4 = COALESCE(primary_or_secondary_dp4, ''),
+  depository_name5 = COALESCE(depository_name5, ''),
+  demat_id5 = COALESCE(demat_id5, ''),
+  beneficial_own_acnt_no5 = COALESCE(beneficial_own_acnt_no5, ''),
+  primary_or_secondary_dp5 = COALESCE(primary_or_secondary_dp5, '');

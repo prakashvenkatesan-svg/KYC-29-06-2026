@@ -1,4 +1,7 @@
-const { exportApplicationToBse } = require("../services/bseExportService");
+const {
+  exportApplicationToBse,
+  exportAllApplicationsToBse,
+} = require("../services/bseExportService");
 
 const postBseExport = async (req, res) => {
   try {
@@ -28,6 +31,25 @@ const postBseExport = async (req, res) => {
   }
 };
 
+const postBulkBseExport = async (req, res) => {
+  try {
+    const exportSummary = await exportAllApplicationsToBse(req.body || {});
+
+    return res.status(200).json({
+      success: true,
+      message: "Bulk BSE export processed successfully",
+      data: exportSummary,
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message || "Unable to process bulk BSE export right now.",
+      ...(error.details ? { details: error.details } : {}),
+    });
+  }
+};
+
 module.exports = {
   postBseExport,
+  postBulkBseExport,
 };

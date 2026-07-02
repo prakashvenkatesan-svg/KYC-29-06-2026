@@ -9,6 +9,18 @@ const firstNonEmpty = (...values) =>
 
 const normalizeProvider = (value) => normalizeLowerText(value);
 
+const hasDigilockerData = (digilocker = {}) =>
+  Boolean(
+    String(digilocker.provider || "").trim() ||
+      String(digilocker.name || "").trim() ||
+      String(digilocker.aadhaar_number_masked || "").trim() ||
+      String(digilocker.address || "").trim() ||
+      String(digilocker.dob || "").trim() ||
+      String(digilocker.gender || "").trim() ||
+      String(digilocker.father_name || "").trim() ||
+      String(digilocker.photo_base64 || "").trim(),
+  );
+
 const resolveVerifiedIdentitySource = (application) => {
   const digilocker = application.digilocker_details || {};
   const kra = application.kra_details || {};
@@ -27,7 +39,8 @@ const resolveVerifiedIdentitySource = (application) => {
 
   if (
     identityProvider === "digilocker" ||
-    digilockerProvider === "digilocker"
+    digilockerProvider === "digilocker" ||
+    hasDigilockerData(digilocker)
   ) {
     return "digilocker";
   }
@@ -60,6 +73,8 @@ const getLastFourDigits = (value) => {
   const digits = String(value || "").replace(/\D/g, "");
   return digits ? digits.slice(-4) : "";
 };
+
+const hasAadhaarLastFourDigits = (value) => /\d{4}/.test(String(value || "").trim());
 
 const getMaskedAadhaarValue = (value) => {
   const rawValue = String(value || "").trim();
@@ -357,8 +372,15 @@ const buildDigiLockerSummaryFields = (application) => {
       "e-Aadhaar generated from DigiLocker verified Aadhaar XML",
     "Generation date": formatDatePart(generatedAt),
     "Download Date": formatDatePart(generatedAt),
-    "Masked Aadhaar": getMaskedAadhaarValue(digilocker.aadhaar_number_masked),
-    Name: String(digilocker.name || "").trim(),
+    "Masked Aadhaar": getMaskedAadhaarValue(
+      hasAadhaarLastFourDigits(digilocker.aadhaar_number_masked)
+        ? digilocker.aadhaar_number_masked
+        : firstNonEmpty(
+            identity.aadhaar_number,
+            application.aadhaar_number,
+            digilocker.aadhaar_number_masked,
+          ),
+    ),
     "Date of Birth": formatDateDisplay(digilocker.dob),
     Gender: normalizeGenderLabel(digilocker.gender),
     "C/O, S/O, D/O": String(digilocker.father_name || "").trim(),
@@ -377,12 +399,7 @@ const buildKraSummaryFields = (application) => {
   const identity =
     application.identity_details || application.identity_verifications || {};
 
-  const hasAnyDigiLockerData = Boolean(
-    String(digilocker.provider || "").trim() ||
-      String(digilocker.name || "").trim() ||
-      String(digilocker.aadhaar_number_masked || "").trim() ||
-      String(digilocker.address || "").trim(),
-  );
+  const hasAnyDigiLockerData = hasDigilockerData(digilocker);
 
   if (
     resolveVerifiedIdentitySource(application) !== "kra" ||
@@ -419,15 +436,27 @@ const buildDigiLockerSummaryAddressOverlays = (application) => {
     return [];
   }
 
+  const applicantName = String(digilocker.name || "").trim();
   const addressLines = wrapText(digilocker.address, 24).slice(0, 3);
 
-  return addressLines.map((line, index) => ({
-    pageIndex: 3,
-    x: 205,
-    y: 590 - index * 14,
-    size: 8,
-    text: line,
-  }));
+  return [
+    applicantName
+      ? {
+          pageIndex: 3,
+          x: 192,
+          y: 674,
+          size: 9,
+          text: applicantName,
+        }
+      : null,
+    ...addressLines.map((line, index) => ({
+      pageIndex: 3,
+      x: 205,
+      y: 590 - index * 14,
+      size: 8,
+      text: line,
+    })),
+  ].filter(Boolean);
 };
 
 const buildDigiLockerSummaryImageOverlays = (application) => {
@@ -525,12 +554,7 @@ const buildKraSummaryOverlays = (application) => {
   const identity =
     application.identity_details || application.identity_verifications || {};
 
-  const hasAnyDigiLockerData = Boolean(
-    String(digilocker.provider || "").trim() ||
-      String(digilocker.name || "").trim() ||
-      String(digilocker.aadhaar_number_masked || "").trim() ||
-      String(digilocker.address || "").trim(),
-  );
+  const hasAnyDigiLockerData = hasDigilockerData(digilocker);
 
   if (
     resolveVerifiedIdentitySource(application) !== "kra" ||
@@ -591,7 +615,15 @@ const getVerifiedIdentityDocumentFields = (application) => ({
 
 const getVerifiedIdentityDocumentClearFields = (application) => {
   if (resolveVerifiedIdentitySource(application) === "digilocker") {
-    return [];
+    return [
+      "NAME",
+      "DATE OF BIRTH",
+      "GENDER",
+      "ADDRESS",
+      "PROOF OF ADDRESS POA",
+      "PROOF OF IDENTITY POI",
+      "GENERATED ON",
+    ];
   }
 
   return [

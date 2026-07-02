@@ -115,18 +115,31 @@ const createContactEnquiry = async (req, res) => {
       [firstName, lastName, email, phoneNumber, message],
     );
 
-    await sendContactEnquiryMail({
-      firstName,
-      lastName,
-      email,
-      phoneNumber,
-      message,
-    });
+    let emailSent = true;
+    let responseMessage = "Your enquiry has been submitted successfully";
+
+    try {
+      await sendContactEnquiryMail({
+        firstName,
+        lastName,
+        email,
+        phoneNumber,
+        message,
+      });
+    } catch (mailError) {
+      emailSent = false;
+      responseMessage =
+        "Your enquiry has been submitted successfully, but email notification could not be sent right now";
+      console.error("Contact enquiry mail error:", mailError.message);
+    }
 
     return res.status(201).json({
       success: true,
-      message: "Your enquiry has been submitted successfully",
-      data: insertResult.rows[0],
+      message: responseMessage,
+      data: {
+        ...insertResult.rows[0],
+        email_sent: emailSent,
+      },
     });
   } catch (error) {
     logDbError("Create contact enquiry error", error);

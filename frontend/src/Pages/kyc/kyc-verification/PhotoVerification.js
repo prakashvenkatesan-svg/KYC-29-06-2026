@@ -1,6 +1,7 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 
 import Webcam from "react-webcam";
+import * as faceapi from "face-api.js";
 
 import { useNavigate } from "react-router-dom";
 
@@ -25,20 +26,51 @@ const PhotoVerification = () => {
     setCapturedImage(null);
     setError("");
   };
+  useEffect(() => {
+  const loadModels = async () => {
+    await faceapi.nets.tinyFaceDetector.loadFromUri("/models");
+  };
+
+  loadModels();
+}, []);
+
 
   // CAPTURE PHOTO
-  const capturePhoto = () => {
-    const imageSrc = webcamRef.current?.getScreenshot();
+  const capturePhoto = async () => {
+  const imageSrc = webcamRef.current?.getScreenshot();
 
-    if (!imageSrc) {
-      setError("Unable to capture photo");
-      return;
-    }
+  if (!imageSrc) {
+    setError("Unable to capture photo");
+    return;
+  }
 
-    setCapturedImage(imageSrc);
-    setCameraOpen(false);
-    setError("");
-  };
+  const img = new Image();
+
+  img.src = imageSrc;
+
+  await new Promise((resolve) => {
+    img.onload = resolve;
+  });
+
+  const detections = await faceapi.detectAllFaces(
+    img,
+    new faceapi.TinyFaceDetectorOptions()
+  );
+
+  if (detections.length === 0) {
+    setError("No human face detected.");
+    return;
+  }
+
+  if (detections.length > 1) {
+    setError("Multiple faces detected. Please ensure only one person is visible.");
+    return;
+  }
+
+  setCapturedImage(imageSrc);
+  setCameraOpen(false);
+  setError("");
+};
 
   const cancelPhoto = () => {
     setCameraOpen(false);

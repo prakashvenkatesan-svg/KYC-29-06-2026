@@ -33,6 +33,9 @@ const {
   getVerifiedIdentityDocumentFields,
   getVerifiedIdentityDocumentOverlays,
 } = require("../../services/pdfVerifiedIdentityOverlayService");
+const {
+  getApplicantNameOverlays,
+} = require("../../services/pdfApplicantNameOverlayService");
 
 const formatDate = (value) => {
   if (!value) return "";
@@ -241,11 +244,27 @@ const buildFullName = (...values) =>
 
 const normalizeProvider = (value) => String(value || "").trim().toLowerCase();
 
+const hasDigilockerData = (digilocker = {}) =>
+  Boolean(
+    String(digilocker.provider || "").trim() ||
+      String(digilocker.name || "").trim() ||
+      String(digilocker.aadhaar_number_masked || "").trim() ||
+      String(digilocker.address || "").trim() ||
+      String(digilocker.dob || "").trim() ||
+      String(digilocker.gender || "").trim() ||
+      String(digilocker.father_name || "").trim() ||
+      String(digilocker.photo_base64 || "").trim(),
+  );
+
 const resolveVerifiedIdentitySource = ({ identity = {}, digilocker = {}, kra = {} }) => {
   const identityProvider = normalizeProvider(identity.provider);
   const digilockerProvider = normalizeProvider(digilocker.provider);
 
-  if (identityProvider === "digilocker" || digilockerProvider === "digilocker") {
+  if (
+    identityProvider === "digilocker" ||
+    digilockerProvider === "digilocker" ||
+    hasDigilockerData(digilocker)
+  ) {
     return "digilocker";
   }
 
@@ -370,11 +389,11 @@ const resolveSourceBasedAadhaarValue = ({
 }) => {
   if (verifiedIdentitySource === "digilocker") {
     return resolvePdfAadhaarValue(
-      digilocker.aadhaar_number_masked,
       personal.maskedNumber,
       personal.aadhaar_number,
       application.aadhaar_number,
       identity.aadhaar_number,
+      digilocker.aadhaar_number_masked,
     );
   }
 
@@ -411,6 +430,8 @@ const normalizeGenderLabel = (value) => {
 };
 
 const normalizeOccupationText = (value) => String(value || "").trim().toLowerCase();
+const isYesValue = (value) => normalizeLowerText(value) === "yes";
+const isNoValue = (value) => normalizeLowerText(value) === "no";
 
 const matchesOccupation = (occupation, expectedValues = []) =>
   expectedValues.includes(normalizeOccupationText(occupation));
@@ -449,6 +470,53 @@ const buildClientCodeFieldOverrides = (clientCode = "") => ({
   "Client UCC": String(clientCode || "").trim(),
 });
 
+const buildDigilockerKraPageFieldSuppressions = (verifiedIdentitySource) => {
+  if (verifiedIdentitySource !== "digilocker") {
+    return {};
+  }
+
+  return {
+    NAME: "",
+    "DATE OF BIRTH": "",
+    GENDER: "",
+    ADDRESS: "",
+    "PROOF OF ADDRESS POA": "",
+    "PROOF OF IDENTITY POI": "",
+    "GENERATED ON": "",
+  };
+};
+
+const buildStandingInstructionCheckboxes = (personal = {}) => {
+  const accountStatementRequirement = normalizeLowerText(
+    personal.account_statement_requirement,
+  );
+
+  return {
+    YES: isYesValue(personal.depository_credit_instruction),
+    NO: isNoValue(personal.depository_credit_instruction),
+    YES1: isYesValue(personal.pledge_instruction),
+    NO1: isNoValue(personal.pledge_instruction),
+    "ASR-PER SEBI": false,
+    "DAILY ASR-PER SEBI": accountStatementRequirement === "daily",
+    WEEKLY: accountStatementRequirement === "weekly",
+    FORTNIGHTYLY: accountStatementRequirement === "fortnightly",
+    MONTHLY: accountStatementRequirement === "monthly",
+    YES2: isYesValue(personal.electronic_transaction_statement),
+    NO2: isNoValue(personal.electronic_transaction_statement),
+    "YES-RTA": isYesValue(personal.share_email_with_rta),
+    "NO-RTA": isNoValue(personal.share_email_with_rta),
+    PHYSICAL:
+      normalizeLowerText(personal.annual_report_preference) === "physical",
+    "ANNUAL REPORT ELECTRONIC":
+      normalizeLowerText(personal.annual_report_preference) === "electronic",
+    "BOTH PHYSICAL & ELECTRONIC":
+      normalizeLowerText(personal.annual_report_preference) ===
+      "both physical and electronic",
+    "YES-ECS": isYesValue(personal.dividend_interest_ecs),
+    "NO-ECS": isNoValue(personal.dividend_interest_ecs),
+  };
+};
+
 const buildPdfFieldPayload = (application) => {
   const contact = application.contact_details || {};
   const personal = application.personal_details || {};
@@ -459,6 +527,10 @@ const buildPdfFieldPayload = (application) => {
   const applicantPhoto = application.applicant_photo_details || {};
   const panCardUpload = application.pan_card_upload_details || {};
   const signatureUpload = application.signature_upload_details || {};
+  const resolvedSignatureImagePath = firstNonEmpty(
+    signatureUpload.signature_file_path,
+    signatureUpload.file_path,
+  );
   const panVerification = application.pan_verification_details || {};
   const bank = application.bank_details || {};
   const clientCodeDetails = application.client_code_details || {};
@@ -688,7 +760,7 @@ const buildPdfFieldPayload = (application) => {
     applicantname: toUpperText(applicantName),
     "NAME OF THE APPLICANT": toUpperText(applicantName),
     "BENEFICIARY NAMECDSL": toUpperText(applicantName),
-    Name: verifiedIdentitySource === "digilocker" ? toUpperText(applicantName) : "",
+    Name: "",
     NAME: toUpperText(applicantName),
     "Sole  First Holders Name": toUpperText(applicantName),
     "SOLEFIRST HOLDERS NAME": toUpperText(applicantName),
@@ -776,6 +848,11 @@ const buildPdfFieldPayload = (application) => {
     buildClientCodeFieldOverrides(clientCode),
   );
 
+  Object.assign(
+    fields,
+    buildDigilockerKraPageFieldSuppressions(verifiedIdentitySource),
+  );
+
     const checkboxes = {
       "NEW KYC": true,
       Normal: verifiedIdentitySource !== "digilocker",
@@ -795,8 +872,6 @@ const buildPdfFieldPayload = (application) => {
       "INDIVIDUAL-STATUS": true,
       "INDIVIDUAL RES-SUB STATUS": true,
       RI: true,
-      YES1: true,
-      NO1: false,
         "YES-INT TRADING": true,
         "NO-INT TRADING": false,
         "I/WE MONTHLY": false,
@@ -832,6 +907,7 @@ const buildPdfFieldPayload = (application) => {
       "SCHEME 1-ACC CHARGES": selectedScheme === "lifeTime",
       "SCHEME 2-ACC CHARGES": selectedScheme === "annualCare",
       "YES/NO-AMC/DP": !hasNominee,
+      ...buildStandingInstructionCheckboxes(personal),
       ...buildNomineeColumnCheckboxes(nominees[0], 1),
       ...buildNomineeColumnCheckboxes(nominees[1], 2),
       ...buildNomineeColumnCheckboxes(nominees[2], 3),
@@ -858,14 +934,20 @@ const buildPdfFieldPayload = (application) => {
         applicantPhotoBase64: firstNonEmpty(applicantPhoto.photo_base64),
         applicantPhotoPath: firstNonEmpty(applicantPhoto.file_path),
         panCardImagePath: firstNonEmpty(panCardUpload.file_path),
-        signatureImagePath: firstNonEmpty(signatureUpload.signature_file_path),
+        signatureImagePath: resolvedSignatureImagePath,
       }),
+      ...getApplicantNameOverlays(application),
       ...getVerifiedIdentityDocumentOverlays(application),
       ...getContactOverlays(application),
       ...getClientCodeOverlays(application),
       ...getBoidOverlayConfigs(application),
       ...getBankIfscOverlays(application),
       ...getDefaultSelectionOverlays(),
+      {
+        kind: "eraseField",
+        fieldName: "Signature3",
+        padding: 0,
+      },
     ],
     missingFields,
     isTestIncomplete: process.env.NODE_ENV !== "production" && missingFields.length > 0,

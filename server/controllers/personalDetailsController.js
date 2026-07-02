@@ -26,6 +26,7 @@ const CONTRACT_NOTE_OPTIONS = ["Physical", "Electronic"];
   Convert any input safely to trimmed string.
 */
 const cleanValue = (value) => String(value || "").trim();
+const hasNumericCharacters = (value) => /\d/.test(cleanValue(value));
 
 /*
   Backend validation for all mandatory Standing Instructions.
@@ -180,6 +181,13 @@ const savePersonalDetails = async (req, res) => {
         success: false,
         message:
           "Father name, mother name, gender and occupation are required.",
+      });
+    }
+
+    if (hasNumericCharacters(motherName)) {
+      return res.status(400).json({
+        success: false,
+        message: "Mother name cannot contain numbers.",
       });
     }
 

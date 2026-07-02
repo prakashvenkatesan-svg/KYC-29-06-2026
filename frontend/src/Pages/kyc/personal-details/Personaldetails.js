@@ -41,6 +41,9 @@ const normalizeGenderLabel = (value) => {
   return String(value || "").trim();
 };
 
+const sanitizeNameValue = (value) =>
+  String(value || "").replace(/[0-9]/g, "");
+
 const PersonalDetails = () => {
   const navigate = useNavigate();
 
@@ -214,7 +217,11 @@ const PersonalDetails = () => {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    const newValue = type === "checkbox" ? checked : value;
+    let newValue = type === "checkbox" ? checked : value;
+
+    if (name === "motherName" && type !== "checkbox") {
+      newValue = sanitizeNameValue(value);
+    }
 
     setFormData((prev) => ({
       ...prev,
@@ -323,6 +330,8 @@ const PersonalDetails = () => {
 
     if (!formData.motherName.trim()) {
       newErrors.motherName = "Mother's name is required";
+    } else if (/\d/.test(formData.motherName)) {
+      newErrors.motherName = "Mother's name cannot contain numbers";
     }
 
     if (!formData.gender.trim()) {

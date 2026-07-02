@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useState } from "react";
+import { toast } from "react-toastify";
 
 import phone from "../assets/phone.png";
 import email from "../assets/email.png";
@@ -6,6 +7,7 @@ import Location from "../assets/Location.png";
 import time from "../assets/time.png";
 
 import otp from "../assets/otp.png";
+import api from "../services/api";
 
 const contactData = [
   {
@@ -93,6 +95,107 @@ const teambranch = [
 ];
 
 const Contact = () => {
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    first_name: "",
+    last_name: "",
+    email: "",
+    phone_number: "",
+    message: "",
+  });
+  const [errors, setErrors] = useState({});
+
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+
+    setFormData((prev) => ({
+      ...prev,
+      [name]: name === "phone_number" ? value.replace(/[^\d+\-\s()]/g, "") : value,
+    }));
+
+    setErrors((prev) => ({
+      ...prev,
+      [name]: "",
+      general: "",
+    }));
+  };
+
+  const validateForm = () => {
+    const nextErrors = {};
+
+    if (!formData.first_name.trim()) {
+      nextErrors.first_name = "First name is required";
+    }
+
+    if (!formData.last_name.trim()) {
+      nextErrors.last_name = "Last name is required";
+    }
+
+    if (!formData.email.trim()) {
+      nextErrors.email = "Email is required";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+      nextErrors.email = "Please enter a valid email address";
+    }
+
+    if (!formData.phone_number.trim()) {
+      nextErrors.phone_number = "Phone number is required";
+    } else if (!/^[0-9+\-\s()]{7,20}$/.test(formData.phone_number.trim())) {
+      nextErrors.phone_number = "Please enter a valid phone number";
+    }
+
+    if (!formData.message.trim()) {
+      nextErrors.message = "Message is required";
+    }
+
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!validateForm()) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setErrors({});
+
+      const payload = {
+        first_name: formData.first_name.trim(),
+        last_name: formData.last_name.trim(),
+        email: formData.email.trim().toLowerCase(),
+        phone_number: formData.phone_number.trim(),
+        message: formData.message.trim(),
+      };
+
+      const response = await api.post("/contact/enquiries", payload);
+      const responseMessage =
+        response?.data?.message || "Your enquiry has been submitted successfully";
+
+      toast.success(responseMessage);
+      setFormData({
+        first_name: "",
+        last_name: "",
+        email: "",
+        phone_number: "",
+        message: "",
+      });
+    } catch (error) {
+      const message =
+        error.response?.data?.message ||
+        error.message ||
+        "Unable to submit your enquiry right now";
+
+      setErrors({
+        general: message,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div>
       <div className='container'>
@@ -126,40 +229,82 @@ const Contact = () => {
 
           <div className='col-lg-8 contact-card-right'>
             <div className='contact-container'>
-              <form className='contact-form'>
+              <form className='contact-form' onSubmit={handleSubmit}>
                 <div className='form-row'>
                   <div className='form-group'>
                     <label>First Name</label>
-                    <input type='text' />
+                    <input
+                      type='text'
+                      name='first_name'
+                      value={formData.first_name}
+                      onChange={handleChange}
+                    />
+                    {errors.first_name && (
+                      <p className='error-text'>{errors.first_name}</p>
+                    )}
                   </div>
 
                   <div className='form-group'>
                     <label>Last Name</label>
-                    <input type='text' />
+                    <input
+                      type='text'
+                      name='last_name'
+                      value={formData.last_name}
+                      onChange={handleChange}
+                    />
+                    {errors.last_name && (
+                      <p className='error-text'>{errors.last_name}</p>
+                    )}
                   </div>
                 </div>
 
                 <div className='form-row'>
                   <div className='form-group'>
                     <label>Email</label>
-                    <input type='email' />
+                    <input
+                      type='email'
+                      name='email'
+                      value={formData.email}
+                      onChange={handleChange}
+                    />
+                    {errors.email && <p className='error-text'>{errors.email}</p>}
                   </div>
 
                   <div className='form-group'>
                     <label>Phone Number</label>
-                    <input type='tel' />
+                    <input
+                      type='tel'
+                      name='phone_number'
+                      value={formData.phone_number}
+                      onChange={handleChange}
+                    />
+                    {errors.phone_number && (
+                      <p className='error-text'>{errors.phone_number}</p>
+                    )}
                   </div>
                 </div>
 
                 <div className='form-group full-width'>
                   <label>Message</label>
-                  <textarea placeholder='Write your message..' />
+                  <textarea
+                    name='message'
+                    placeholder='Write your message..'
+                    value={formData.message}
+                    onChange={handleChange}
+                  />
+                  {errors.message && <p className='error-text'>{errors.message}</p>}
                 </div>
 
+                {errors.general && <p className='error-text'>{errors.general}</p>}
+
                 <div className='btn-wrapper'>
-                  <button type='submit' className='send-message-btn'>
+                  <button
+                    type='submit'
+                    className='send-message-btn'
+                    disabled={loading}
+                  >
                     <img src={otp} alt='Send' className='send-icon' />
-                    Send Message
+                    {loading ? "Sending..." : "Send Message"}
                   </button>
                 </div>
               </form>

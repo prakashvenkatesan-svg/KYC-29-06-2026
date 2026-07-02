@@ -378,14 +378,13 @@ const getTemplateCompatibilityOverlays = ({
           fieldName: getApplicantSignatureFieldName(),
           imagePath: String(signatureImagePath || "").trim(),
           padding: 2,
-        }
-      : null,
-    isTemplateV3() &&
-    String(signatureImagePath || "").trim() &&
-    parseDeclarationSignatureOverlayConfig()
-      ? {
-          ...parseDeclarationSignatureOverlayConfig(),
-          imagePath: String(signatureImagePath || "").trim(),
+          excludeRectRanges: [
+            {
+              pageIndex: 8,
+              minY: 150,
+              maxY: 260,
+            },
+          ],
         }
       : null,
     String(panCardImagePath || "").trim() && parsePanCardOverlayConfig()

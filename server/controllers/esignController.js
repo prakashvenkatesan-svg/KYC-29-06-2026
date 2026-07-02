@@ -200,6 +200,8 @@ const startEsign = async (req, res) => {
       esign_request_id: result.requestId,
       esign_status: "pending",
       esign_redirect_url: result.redirectUrl,
+      esign_signed_pdf_path: "",
+      esign_signed_at: null,
       esign_last_provider_message: normalizeProviderMessage(result.requestPayload),
     });
 

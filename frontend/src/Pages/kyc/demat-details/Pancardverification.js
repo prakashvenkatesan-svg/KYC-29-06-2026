@@ -664,23 +664,21 @@ const Pancardverification = () => {
             </div>
 
             <div className='input-container'>
-              <label>
+              <input
+                type='text'
+                className='input-field'
+                name='dob'
+                value={formData.dob}
+                onChange={handleDobChange}
+                placeholder='dd-mm-yyyy'
+                inputMode='numeric'
+                maxLength='10'
+                disabled={loading}
+              />
+
+              <label className='floating-label'>
                 Date of Birth <span className='required'>*</span>
               </label>
-
-              <div className='date-input-container'>
-                <input
-                  type='text'
-                  className='date-input'
-                  name='dob'
-                  value={formData.dob}
-                  onChange={handleDobChange}
-                  placeholder='dd-mm-yyyy'
-                  inputMode='numeric'
-                  maxLength='10'
-                  disabled={loading}
-                />
-              </div>
 
               {errors.dob && <p className='error-text'>{errors.dob}</p>}
             </div>

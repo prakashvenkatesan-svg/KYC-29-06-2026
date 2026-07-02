@@ -1,8 +1,11 @@
 // const sendMail = require("../utils/mailSender");
 const pool = require("../config/db");
+const {
+  runPostClientCodeAutomations,
+} = require("../services/postClientCodeAutomationService");
 
 // SERIAL NUMBER
-let serialNumber = 100001;
+let serialNumber = {};
 
 // GENERATE CLIENT CODE
 function generateClientCode(panNumber) {
@@ -22,7 +25,7 @@ function generateClientCode(panNumber) {
 // MAIN API
 const generateClientCodeAfterPayment = async (req, res) => {
   try {
-    const { email, panNumber } = req.body;
+    const { email, panNumber, application_id } = req.body;
 
     // VALIDATION
     if (!email) {
@@ -64,6 +67,12 @@ const generateClientCodeAfterPayment = async (req, res) => {
 
     console.log("CLIENT CODE SAVED:", result.rows[0]);
 
+    const autoExport = await runPostClientCodeAutomations({
+      applicationId: application_id,
+      email,
+      panNumber,
+    });
+
     // SEND EMAIL
     // await sendMail(email, clientCode);
 
@@ -74,6 +83,7 @@ const generateClientCodeAfterPayment = async (req, res) => {
       message: "Client code generated and mail sent successfully",
       clientCode,
       data: result.rows[0],
+      auto_export: autoExport,
     });
   } catch (error) {
     console.error("ERROR:", error);

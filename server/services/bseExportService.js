@@ -12,6 +12,16 @@ const createHttpError = (message, statusCode, details = null) => {
   return error;
 };
 
+const normalizeApplicationIds = (value) => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => Number(item))
+    .filter((item) => Number.isInteger(item) && item > 0);
+};
+
 const exportApplicationToBse = async (applicationId) => {
   const client = await pool.connect();
 
@@ -126,6 +136,62 @@ const exportApplicationToBse = async (applicationId) => {
   }
 };
 
+const exportAllApplicationsToBse = async (options = {}) => {
+  const requestedApplicationIds = normalizeApplicationIds(options.application_ids);
+  const requestedLimit = Number(options.limit);
+  const limit =
+    Number.isInteger(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, 5000)
+      : null;
+
+  let applicationIds = requestedApplicationIds;
+
+  if (applicationIds.length === 0) {
+    const baseQuery = `
+      SELECT id
+      FROM public.kyc_applications
+      ORDER BY id ASC
+      ${limit ? "LIMIT $1" : ""}
+    `;
+
+    const result = await pool.query(baseQuery, limit ? [limit] : []);
+    applicationIds = result.rows.map((row) => Number(row.id));
+  } else if (limit) {
+    applicationIds = applicationIds.slice(0, limit);
+  }
+
+  const results = [];
+
+  for (const applicationId of applicationIds) {
+    try {
+      const exportedRow = await exportApplicationToBse(applicationId);
+      results.push({
+        application_id: exportedRow.application_id,
+        success: true,
+        bse_row_id: exportedRow.id,
+      });
+    } catch (error) {
+      results.push({
+        application_id: applicationId,
+        success: false,
+        message: error.message || "Unable to export BSE data right now.",
+        ...(error.details ? { details: error.details } : {}),
+      });
+    }
+  }
+
+  const successCount = results.filter((item) => item.success).length;
+  const failureCount = results.length - successCount;
+
+  return {
+    total_requested: applicationIds.length,
+    success_count: successCount,
+    failure_count: failureCount,
+    results,
+  };
+};
+
 module.exports = {
   exportApplicationToBse,
+  exportAllApplicationsToBse,
 };

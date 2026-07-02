@@ -104,6 +104,9 @@ const buildBoidPdfFields = (application) => {
 
   if (clientId) {
     fields["DP ID CLIENT ID"] = clientId;
+    fields["CLIENT ID ONLY FOR DEMAT ACCOUNT"] = clientId;
+    fields["INe the cliens mentioned herein below holding BO ID 12100800"] =
+      clientId;
   }
 
   return fields;
